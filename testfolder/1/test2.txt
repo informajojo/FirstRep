@@ -1,1 +1,118 @@
-sdfasdfhellobranch
+using System;
+using System.IO;
+namespace InformCC
+{
+	/// <summary>
+	/// Summary description for clsTempDirectory.
+	/// </summary>
+	[Serializable]
+    [System.Reflection.ObfuscationAttribute(Exclude = true)]
+	public class clsTempDirectory
+	{
+		private string m_uniqueId = string.Empty;
+		private string m_tempDir = string.Empty;
+		private string m_uniqueTempDir = string.Empty;
+		private string m_uniqueTempDirForWeb = string.Empty;
+
+        public clsTempDirectory(System.Web.HttpServerUtility hsu, System.Web.SessionState.HttpSessionState ss)
+		{
+            string strUserId = Utils.GetUserIdString();
+            
+            m_uniqueId = strUserId + "_" + System.Guid.NewGuid().ToString();
+			m_tempDir = hsu.MapPath("temp");
+            if (ss["WAITRENDERXML"] != null)
+            {
+                cancelWaitingFiles(m_tempDir, (string)ss["WAITRENDERXML"]);
+                ss["WAITRENDERXML"] = null;
+            }
+			m_uniqueTempDir = m_tempDir + "\\" + m_uniqueId+"\\";
+			m_uniqueTempDirForWeb = "temp/" + m_uniqueId+"/";
+			Directory.CreateDirectory(m_uniqueTempDir);
+		}
+
+        public static void cancelWaitingFiles(string strRootDir, string strXmlFiles)
+        {
+            foreach (string strXmlFileInList in strXmlFiles.Split(";".ToCharArray()))
+            {
+                if (strXmlFileInList.Trim().Length == 0)
+                    continue;
+                try
+                {
+                    System.IO.File.Delete(strRootDir + "\\" + strXmlFileInList);
+                }
+                catch { 
+                
+                }
+            }
+            
+        }
+
+
+        /// <summary>
+        /// Konstruktor för CCHotFolder
+        /// </summary>
+        /// <param name="tempdirectory"></param>
+        /// <param name="uniqueId"></param>
+        public clsTempDirectory(string tempdirectory, string uniqueId)
+        {
+            m_uniqueId = uniqueId;
+            m_tempDir = tempdirectory;
+            m_uniqueTempDir = m_tempDir + "\\" + m_uniqueId + "\\";
+            m_uniqueTempDirForWeb = "temp/" + m_uniqueId + "/";
+        }
+        
+        /// <summary>
+        /// Konstruktor för CCTextCompareTester...
+        /// </summary>
+        [Obsolete("This is not to be used other than in Tester")]
+        public clsTempDirectory()
+        {
+        }
+
+		public string GetUniqueID()
+		{
+			return m_uniqueId;
+		}
+
+		public string GetTempDir()
+		{
+			return m_tempDir;
+		}
+
+		public string GetUniqueTempDir()
+		{
+			return m_uniqueTempDir;
+		}
+
+        [System.Reflection.ObfuscationAttribute(Exclude = true)]
+		public string GetUniqueTempDirForWeb()
+		{
+			return m_uniqueTempDirForWeb;
+		}
+
+		public string GetUniqueTempDir(string underDir)
+		{
+			string dir = m_uniqueTempDir + underDir;
+			if (!Directory.Exists(dir))
+				Directory.CreateDirectory(dir);
+
+			if (!dir.EndsWith("\\"))
+				dir += "\\";
+			return dir;
+		}
+
+        public string GetUniqueTempDirForWeb(string underDir)
+		{
+			if (!underDir.EndsWith("/"))
+				underDir += "/";
+			return m_uniqueTempDirForWeb + underDir;
+		}
+
+		public static string getUniqueDirectory(System.Web.SessionState.HttpSessionState hss)
+		{
+			string sDir = (clsCompareInformation.getFromSession(hss)).TempDirectory.GetUniqueTempDir();
+			if (!sDir.EndsWith("\\")) sDir += "\\";
+			return sDir;
+		}
+	}
+}
