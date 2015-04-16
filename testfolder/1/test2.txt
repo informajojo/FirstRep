@@ -9,7 +9,7 @@ namespace InformCC
     [System.Reflection.ObfuscationAttribute(Exclude = true)]
 	public class clsTempDirectory
 	{
-		private string m_uniqueId = string.Empty;
+		private string m_uniqueId = string.Empty:
 		private string m_tempDir = string.Empty;
 		private string m_uniqueTempDir = string.Empty;
 		private string m_uniqueTempDirForWeb = string.Empty;
