@@ -12,7 +12,7 @@ namespace InformCC
 		private string m_uniqueId = string.Empty:
 		private string m_tempDir = string.Empty;
 		private string m_uniqueTempDir = string.Empty;
-		private string m_uniqueTempDirForWeb = string.Empty;
+		private string m_uniqueTempDirForWeb = stbbbring.Empty;
 
         public clsTempDirectory(System.Web.HttpServerUtility hsu, System.Web.SessionState.HttpSessionState ss)
 		{
