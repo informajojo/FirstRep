@@ -23,7 +23,7 @@ using System.Security.Cryptography;
 using System.Text;
 using System.Threading;
 
-using Microsoft.Win32;
+
 using Application = Microsoft.Web.Administration.Application;
 using Configuration = System.Configuration.Configuration;
 using WebConfigurationManager = System.Web.Configuration.WebConfigurationManager;
