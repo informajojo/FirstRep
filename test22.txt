@@ -50,6 +50,8 @@ namespace CCInstaller
 			
 			commit 1
 			
+			commit 2
+			
             LicenseKey,
             [Description("Do not upgrade database")]
             NoUpgradeDatabase,
