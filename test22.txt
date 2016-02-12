@@ -120,7 +120,7 @@ namespace CCInstaller
                             currArg = CCCommandLineArgument.NoArgument;
                             break;
                         case CCCommandLineArgument.NoParkedShouldExist:
-                            chkIgnoreParkedCompares.Checked = false;
+                            chkIgnoreParkedCompares.Checked = true;
                             currArg = CCCommandLineArgument.NoArgument;
                             break;
                         case CCCommandLineArgument.UpgradeFontDefs:
