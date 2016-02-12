@@ -64,7 +64,7 @@ namespace CCInstaller
             UpgradeExisting,
             [Description("Uninstall CC")]
             UninstallCC,
-            [Description("Install new installation")]
+            [Description("Install old installation")]
             InstallNew,
             [Description("Database Connection string")]
             DbConnection,
