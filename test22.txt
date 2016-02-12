@@ -28,7 +28,7 @@ namespace CCInstaller
     {
         public const int CC_ENGINE_DEFAULT_PAUSE = 1000;
 
-        public static string GetDescriptionFromEnumValue(Enum value)
+        public static string GetDescriptionFromEnumValue(Enum valueBRANCHTAG)
         {
             DescriptionAttribute attribute = value.GetType()
                 .GetField(value.ToString())
