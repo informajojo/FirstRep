@@ -47,6 +47,9 @@ namespace CCInstaller
         public enum CCCommandLineArgument
         {
             [Description("Install license key")]
+			
+			commit 1
+			
             LicenseKey,
             [Description("Do not upgrade database")]
             NoUpgradeDatabase,
