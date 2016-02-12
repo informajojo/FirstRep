@@ -26,7 +26,7 @@ namespace CCInstaller
 {
     public partial class InstallerForm : Form
     {
-        public const int CC_ENGINE_DEFAULT_PAUSE = 1000;
+        public const int CC_ENGINE_DEFAULT_PAUSE = 600;
 
         public static string GetDescriptionFromEnumValue(Enum value)
         {
