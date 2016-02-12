@@ -72,16 +72,6 @@ namespace CCInstaller
             DbConnectionSec,
             NoArgument
         }
-        public InstallerForm()
-        {
-            InitializeComponent();
-            string pData = Environment.GetEnvironmentVariable("PROGRAMDATA");
-            if (pData.Length == 0)
-                pData = "C:\\ProgramData";
-
-            txtCCDataDir.Text = pData + "\\InformaIT AB\\";
-            txtInstallDir.Text = Environment.GetFolderPath(Environment.SpecialFolder.ProgramFiles) + "\\InformaIT AB\\";
-        }
 
         public bool InitializeFromArgs(string[] args)
         {
