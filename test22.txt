@@ -15,9 +15,9 @@ commit 2
 
 commit 3
 
-
-
 new features
+
+new 1
 
 using System.IO;
 using System.Linq;
@@ -51,6 +51,11 @@ namespace CCInstaller
         public enum CCCommandLineArgument
         {
             [Description("Install license key")]
+			
+			commit 1
+			
+			commit 2
+			
             LicenseKey,
             [Description("Do not upgrade database")]
             NoUpgradeDatabase,
