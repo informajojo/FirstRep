@@ -1,0 +1,2363 @@
+using System;
+using System.Collections.Generic;
+using System.ComponentModel;
+using System.Configuration;
+using System.Data;
+using System.Data.OracleClient;
+using System.Data.SqlClient;
+using System.Diagnostics;
+using System.DirectoryServices;
+using System.IO;
+using System.Linq;
+using System.Reflection;
+using System.Runtime.InteropServices;
+using System.Security.Cryptography;
+using System.Text;
+using System.Threading;
+
+using Microsoft.Win32;
+using Application = Microsoft.Web.Administration.Application;
+using Configuration = System.Configuration.Configuration;
+using WebConfigurationManager = System.Web.Configuration.WebConfigurationManager;
+
+// ReSharper disable PossibleNullReferenceException
+
+namespace CCInstaller
+{
+    public partial class InstallerForm : Form
+    {
+<<<<<<< HEAD
+        public const int CC_ENGINE_DEFAULT_PAUSE = 800;
+=======
+        public const int CC_ENGINE_DEFAULT_PAUSE = 600;
+>>>>>>> 14f06b506e054825e41c529a008553e0b3ba5c03
+
+        public static string GetDescriptionFromEnumValue(Enum value)
+        {
+            DescriptionAttribute attribute = value.GetType()
+                .GetField(value.ToString())
+                .GetCustomAttributes(typeof(DescriptionAttribute), false)
+                .SingleOrDefault() as DescriptionAttribute;
+            return attribute == null ? value.ToString() : attribute.Description;
+        }
+        public enum CCCommandLineArgument
+        {
+            [Description("Install license key")]
+            LicenseKey,
+            [Description("Do not upgrade database")]
+            NoUpgradeDatabase,
+            [Description("Stop if directories exist already")]
+            DirShouldNotExist,
+            [Description("Stop if parked exist")]
+            NoParkedShouldExist,
+            [Description("Upgrade font definitions")]
+            UpgradeFontDefs,
+            [Description("Upgrade xpdf version")]
+            UpgradeXpdf,
+            [Description("Installation data directory")]
+            DataDir,
+            [Description("Installation name")]
+            Name,
+            [Description("Installation directory")]
+            InstallDir,
+            [Description("Installation messages output file")]
+            OutputFile,
+            [Description("Open interactive installation")]
+            Interactive,
+            [Description("Upgrade installation")]
+            UpgradeExisting,
+            [Description("Uninstall CC")]
+            UninstallCC,
+            [Description("Install old installation")]
+            InstallNew,
+            [Description("Database Connection string")]
+            DbConnection,
+            [Description("Database Secure Connection string")]
+            DbConnectionSec,
+            NoArgument
+        }
+
+        public bool InitializeFromArgs(string[] args)
+        {
+            IsInteractive = true;
+
+            CCCommandLineArgument currArg = CCCommandLineArgument.NoArgument;
+            if (args.Length == 0)
+                return true;
+            bool error = false;
+            foreach (string s in args)
+            {
+                IsInteractive = false;
+                if (currArg == CCCommandLineArgument.NoArgument)
+                {
+                    if (!CCCommandLineArgument.TryParse(s.TrimStart("-".ToCharArray()), out currArg))
+                    {
+                        MessageOutput("Invalid argument " + s);
+                        error = true;
+                        break;
+                    }
+                    switch (currArg)
+                    {
+                        case CCCommandLineArgument.NoUpgradeDatabase:
+                            chkUpgradeDatabase.Checked = false;
+                            currArg = CCCommandLineArgument.NoArgument;
+                            break;
+                        case CCCommandLineArgument.DirShouldNotExist:
+                            chkDirContinueAlreadyExists.Checked = false;
+                            currArg = CCCommandLineArgument.NoArgument;
+                            break;
+                        case CCCommandLineArgument.NoParkedShouldExist:
+                            chkIgnoreParkedCompares.Checked = true;
+                            currArg = CCCommandLineArgument.NoArgument;
+                            break;
+                        case CCCommandLineArgument.UpgradeFontDefs:
+                            chkUpgradeFontDefs.Checked = true;
+                            currArg = CCCommandLineArgument.NoArgument;
+                            break;
+                        case CCCommandLineArgument.UpgradeXpdf:
+                            chkUpgradeXpdf.Checked = true;
+                            currArg = CCCommandLineArgument.NoArgument;
+                            break;
+                        case CCCommandLineArgument.Interactive:
+                            IsInteractive = true;
+                            currArg = CCCommandLineArgument.NoArgument;
+                            break;
+                        case CCCommandLineArgument.InstallNew:
+                            InstallNew = true;
+                            currArg = CCCommandLineArgument.NoArgument;
+                            break;
+                        case CCCommandLineArgument.UpgradeExisting:
+                            UpgradeExisting = true;
+                            currArg = CCCommandLineArgument.NoArgument;
+                            break;
+                        case CCCommandLineArgument.UninstallCC:
+                            UninstallCC = true;
+                            currArg = CCCommandLineArgument.NoArgument;
+                            break;
+                    }
+                }
+                else
+                {
+                    switch (currArg)
+                    {
+                        case CCCommandLineArgument.LicenseKey:
+                            if (System.IO.File.Exists(s))
+                                txtLicenseKey.Text = System.IO.File.ReadAllText(s);
+                            else
+                                txtLicenseKey.Text = s;
+                            chkSetLicenseKey.Checked = true;
+                            break;
+                        case CCCommandLineArgument.DataDir:
+                            txtCCDataDir.Text = s;
+                            break;
+                        case CCCommandLineArgument.Name:
+                            txtInstallationName.Text = s.Trim();
+                            break;
+                        case CCCommandLineArgument.InstallDir:
+                            var installDir = s;
+                            if (!installDir.EndsWith("\\"))
+                            {
+                                installDir = installDir + "\\";
+                            }
+                            txtInstallDir.Text = installDir;
+                            break;
+                        case CCCommandLineArgument.OutputFile:
+                            OutLogFile = s;
+                            break;
+                        case CCCommandLineArgument.DbConnection:
+                            DbConnection = s;
+                            break;
+                        case CCCommandLineArgument.DbConnectionSec:
+                            DbConnectionSec = s;
+                            break;
+                    }
+                    currArg = CCCommandLineArgument.NoArgument;
+                }
+            }
+            if (error)
+            {
+                foreach (string strName in Enum.GetNames(typeof(CCCommandLineArgument)).Where(sdf => sdf != "NoArgument"))
+                {
+                    MessageOutput("-" + strName + " " +
+                                  GetDescriptionFromEnumValue((CCCommandLineArgument)Enum.Parse(typeof(CCCommandLineArgument), strName)));
+                }
+            }
+            IsInteractive = IsInteractive || error || args.Length == 0;
+            return !error;
+        }
+
+        public string OutLogFile { get; set; }
+        public bool IsInteractive { get; set; }
+        public bool InstallNew { get; set; }
+        public bool UpgradeExisting { get; set; }
+        public string DbConnection { get; set; }
+        public string DbConnectionSec { get; set; }
+        public bool UninstallCC { get; set; }
+
+        private bool IsInAdminRole()
+        {
+            // try to write a tmp file to c:\program files...
+            string fileName = Guid.NewGuid() + ".txt";
+            try
+            {
+                File.WriteAllText(Environment.GetFolderPath(Environment.SpecialFolder.ProgramFiles) + "\\" + fileName, "HELLO TEST");
+            }
+            catch (UnauthorizedAccessException)
+            {
+                return false;
+            }
+            catch
+            {
+                return false;
+            }
+            try
+            {
+                File.Delete(Environment.GetFolderPath(Environment.SpecialFolder.ProgramFiles) + "\\" + fileName);
+            }
+            catch (UnauthorizedAccessException)
+            {
+                return false;
+            }
+            catch
+            {
+                return false;
+            }
+            return true;
+        }
+
+        private void btnInstall_Click(object sender, EventArgs e)
+        {
+            InstallCC(true, txtInstallationName.Text);
+        }
+
+        private void InstallCC(bool bInstall, string strName)
+        {
+            txtDebug.Text = "";
+            // Create installation directory
+            string strInstallDir = txtInstallDir.Text;
+            string strDataDir = GetDataDir(strName);
+
+
+            string strCCSubDir = "";
+            if (bAMSMode)
+                strCCSubDir = @"\DC20";
+
+            string strCCDir = GetCCDir();
+
+            if (bInstall)
+            {
+                DebugWrite("Creating directory " + strInstallDir);
+                if (Directory.Exists(strInstallDir) && !chkDirContinueAlreadyExists.Checked)
+                {
+                    MessageOutput("Directory already exists.");
+                    return;
+                }
+                Directory.CreateDirectory(strInstallDir);
+                DebugWrite("Created directory " + strInstallDir);
+                DebugWrite("Creating directory " + strInstallDir + "\\" + strName);
+                if (Directory.Exists(strInstallDir + "\\" + strName) && !chkDirContinueAlreadyExists.Checked)
+                {
+                    MessageOutput("Directory already exists.");
+                    return;
+                }
+                Directory.CreateDirectory(strInstallDir + "\\" + strName);
+                DebugWrite("Created directory " + strInstallDir + "\\" + strName);
+
+
+                if (AskToDo("Do you want to install xpdf rasterizer?"))
+                    InstallXpdf(strCCDir + @"\xpdfrasterizercom");
+            }
+            else
+            {
+                if (!CheckForParked(strInstallDir + strName, strCCSubDir))
+                {
+                    return;
+                }
+                if (!CheckVicDllsWritable(strInstallDir + strName + strCCSubDir + "\\InformCC\\bin\\"))
+                {
+                    return;
+                }
+                StopService(strInstallDir + strName + "\\CCEngine", "CCEngine");
+                if (bAMSMode)
+                {
+                    StopService(strInstallDir + strName + "\\InformWFService", "InForm Workflow Service");
+                }
+            }
+
+            // Run vcredist_x86.exe
+            if (!File.Exists(Path.Combine(Environment.SystemDirectory, "msvcr100.dll")) && AskToDo("Do you want to install Visual C++ redist?"))
+                InstallVCRuntime(strCCDir + @"\");
+
+            strInstallDir += "\\" + strName;
+            strInstallDir = strInstallDir.Replace("\\\\", "\\");
+
+            bWebService = bAMSMode && Directory.Exists(strCCDir + @"\WS_DC_Integration");
+
+            // Copy all files
+            CreateDirectory(strInstallDir + @"\DC20");
+            CreateDirectory(strInstallDir + strCCSubDir + @"\InformCC");
+            CreateDirectory(strInstallDir + @"\CCEngine");
+            CreateDirectory(strInstallDir + @"\CCUploadService");
+
+            if (bAMSMode)
+            {
+                CreateDirectory(strInstallDir + @"\InformWFService");
+
+
+                CreateDirectory(strDataDir + @"InfoPathPreviews");
+                SetWritePermission(strDataDir + @"InfoPathPreviews", true);
+
+                CreateDirectory(strDataDir + @"Report_temp");
+                SetWritePermission(strDataDir + @"Report_Temp", true);
+
+                CreateDirectory(strInstallDir + @"\DC20\Review");
+                CreateDirectory(strDataDir + @"Notes_Temp");
+                SetWritePermission(strDataDir + @"Notes_Temp", true);
+
+                if (bWebService)
+                {
+                    CreateDirectory(strInstallDir + @"\WS_DC_Integration");
+                    CreateDirectory(strInstallDir + @"\WS_DC_Integration\bin");
+                }
+            }
+            CopyCCFiles(strInstallDir + @"\DC20", strCCDir + @"\DC20");
+            CopyCCFiles(strInstallDir + strCCSubDir + @"\InformCC", strCCDir + @"\InformCC");
+            CopyCCFiles(strInstallDir + @"\CCUploadService", strCCDir + @"\CCUploadService");
+            if (bWebService)
+                CopyCCFiles(strInstallDir + @"\WS_DC_Integration", strCCDir + @"\WS_DC_Integration");
+            FixDMWrapper(strCCDir, strInstallDir + @"\DC20\bin");
+            FixDMWrapper(strCCDir, strInstallDir + strCCSubDir + @"\InformCC\bin");
+            if (bWebService)
+                FixDMWrapper(strCCDir, strInstallDir + @"\WS_DC_Integration\bin");
+
+            if (bAMSMode)
+            {
+                // Install Crystal Reports...
+                InstallCrystalReports(strCCDir + @"\");
+            }
+            if (bAMSMode)
+            {
+                string strCurrConfigFileName = strInstallDir + @"\InformWFService\InformWFService.exe.config" + DateTime.Now.Ticks;
+                bool bKeep = false;
+                if (!bInstall)
+                {
+                    if (File.Exists(strInstallDir + @"\InformWFService\InformWFService.exe.config"))
+                    {
+                        File.Move(strInstallDir + @"\InformWFService\InformWFService.exe.config", strCurrConfigFileName);
+                        bKeep = true;
+                    }
+                }
+                CopyCCFiles(strInstallDir + @"\InformWFService", strCCDir + @"\InformWFService");
+                if (bKeep)
+                {
+                    if (File.Exists(strInstallDir + @"\InformWFService\InformWFService.exe.config"))
+                    {
+                        File.Delete(strInstallDir + @"\InformWFService\InformWFService.exe.config");
+                    }
+                    File.Move(strCurrConfigFileName, strInstallDir + @"\InformWFService\InformWFService.exe.config");
+                }
+            }
+
+            if (!bInstall)
+            {
+                StopService(strInstallDir + "\\CCEngine", "CCEngine");
+                if (bAMSMode)
+                {
+                    StopService(strInstallDir + "\\InformWFService", "InForm Workflow Service");
+                }
+            }
+            CopyCCFiles(strInstallDir + @"\CCEngine", strCCDir + @"\CCEngine");
+            FixXpdfInCCEngine(strInstallDir + @"\CCEngine");
+            if (!File.Exists(strInstallDir + strCCSubDir + @"\InformCC\CCTextFilter.config"))
+            {
+                DebugWrite("Creating text filter file.");
+                File.CreateText(strInstallDir + strCCSubDir + @"\InformCC\CCTextFilter.config").Close();
+            }
+            if (!File.Exists(strInstallDir + strCCSubDir + @"\InformCC\CCTextFilter2.config"))
+            {
+                DebugWrite("Creating text filter file.");
+                File.CreateText(strInstallDir + strCCSubDir + @"\InformCC\CCTextFilter2.config").Close();
+            }
+            if (bInstall)
+            {
+                DebugWrite("Setting permissions.");
+                SetWritePermission(strInstallDir + strCCSubDir + @"\InformCC\CCTextFilter.config", false);
+                SetWritePermission(strInstallDir + strCCSubDir + @"\InformCC\CCTextFilter2.config", false);
+
+                if (!Directory.Exists(strDataDir + @"CCtemp"))
+                {
+                    Directory.CreateDirectory(strDataDir + @"CCtemp");
+                }
+
+                if (!Directory.Exists(strDataDir + @"ScannerJobs"))
+                {
+                    Directory.CreateDirectory(strDataDir + @"ScannerJobs");
+                }
+
+                if (!Directory.Exists(strDataDir + @"InformCC_log"))
+                {
+                    Directory.CreateDirectory(strDataDir + @"InformCC_log");
+                }
+                SetWritePermission(strDataDir + @"CCtemp", true);
+                SetWritePermission(strDataDir + @"ScannerJobs", true);
+                SetWritePermission(strDataDir + @"InformCC_log", true);
+
+                if (bAMSMode)
+                {
+                    SetWritePermission(strDataDir + @"InfoPathPreviews", true);
+                    SetWritePermission(strDataDir + @"Notes_Temp", true);
+                    SetWritePermission(strDataDir + @"Report_Temp", true);
+                    if (!Directory.Exists(strDataDir + @"InformWFServiceLog"))
+                    {
+                        Directory.CreateDirectory(strDataDir + @"InformWFServiceLog");
+                    }
+                    SetWritePermission(strDataDir + @"InformWFServiceLog", true);
+                }
+                if (!Directory.Exists(strDataDir + @"DC20_log"))
+                {
+                    Directory.CreateDirectory(strDataDir + @"DC20_log");
+                }
+                SetWritePermission(strDataDir + @"DC20_log", true);
+
+                if (bWebService)
+                {
+                    if (!Directory.Exists(strDataDir + @"WS_DC_Integration_log"))
+                    {
+                        Directory.CreateDirectory(strDataDir + @"WS_DC_Integration_log");
+                    }
+                    SetWritePermission(strDataDir + @"WS_DC_Integration_log", true);
+                }
+                DebugWrite("Permissions set.");
+                // Install CCEngine
+                InstallService(strInstallDir + @"\CCEngine\CCEngine.exe", strName);
+                if (bAMSMode)
+                {
+                    InstallService(strInstallDir + @"\InformWFService\InformWFService.exe", strName);
+                }
+                DebugWrite("Fixing CCEngineConfig.");
+                FixCcengineconfig(strInstallDir + @"\CCEngine\CCEngine.exe.config", strInstallDir, strDataDir);
+
+                // fix iis-app
+                DebugWrite("Fixing IISApp.");
+                if (AskToDo("Do you want to create IIS virtual directory?"))
+                    FixIISApp(strName, strInstallDir);
+                else
+                    MessageOutput("Open IIS Admin and create application for DC20 and InformCC yourself." + (bWebService ? " (and also for web service..) " : ""));
+                DebugWrite("Fixing DB Connection settings.");
+                FixWebConfigDlg(strCCDir + @"\\default.config");
+                if (bAMSMode)
+                {
+                    try
+                    {
+                        FixConfigInWorkflow(strCCDir + @"\\default.config", strInstallDir + @"\InformWFService\InformWfService.exe.config");
+                    }
+                    catch
+                    {
+                        MessageOutput("Could not fix configuration for workflow service, please update manually.");
+                    }
+                }
+                IfExistsDelete(strInstallDir + strCCSubDir + @"\InformCC\web.config");
+                IfExistsDelete(strInstallDir + @"\DC20\web.config");
+                IfExistsDelete(strInstallDir + strCCSubDir + @"\InformCC\EnabledTextSettings.xml");
+                IfExistsDelete(strInstallDir + strCCSubDir + @"\InformCC\TextSettings.xml");
+                IfExistsDelete(strInstallDir + strCCSubDir + @"\InformCC\gcsettings.xml");
+
+                DebugWrite("Copy Settings to installation folders.");
+                if (!bAMSMode)
+                {
+                    File.Copy(strCCDir + @"\\default.config", strInstallDir + @"\InformCC\web.config");
+                    string strLogFileCC = strDataDir + @"InformCC_log\cclog.txt";
+                    FixLogDirectoryAndUniqueKey("CC", strLogFileCC, strInstallDir + @"\InformCC\web.config");
+                }
+                File.Copy(strCCDir + @"\\default.config", strInstallDir + @"\DC20\web.config");
+                string strLogFileDC = strDataDir + @"DC20_log\dclog.txt";
+                FixLogDirectoryAndUniqueKey("DC", strLogFileDC, strInstallDir + @"\DC20\web.config");
+
+                if (bAMSMode)
+                {
+                    string strLogFileINFORMWF = strDataDir + @"InformWFServiceLog\InformWFLog.txt";
+                    FixLogDirectoryAndUniqueKey("InformWFService", strLogFileINFORMWF, strInstallDir + @"\INFORMWFSERVICE\INFORMWFSERVICE.exe.config");
+                }
+
+                if (bWebService)
+                {
+                    File.Copy(strCCDir + @"\\default.config", strInstallDir + @"\WS_DC_Integration\web.config");
+                    string strLogFileWS = strDataDir + @"WS_DC_Integration_log\wslog.txt";
+                    FixLogDirectoryAndUniqueKey("WS_DC_Integration", strLogFileWS, strInstallDir + @"\WS_DC_Integration\web.config");
+                }
+                File.Copy(strCCDir + @"\\EnabledTextSettings.xml", strInstallDir + strCCSubDir + @"\InformCC\EnabledTextSettings.xml");
+                File.Copy(strCCDir + @"\\TextSettings.xml", strInstallDir + strCCSubDir + @"\InformCC\TextSettings.xml");
+                File.Copy(strCCDir + @"\\gcsettings.xml", strInstallDir + strCCSubDir + @"\InformCC\gcsettings.xml");
+                if (!File.Exists(strInstallDir + strCCSubDir + @"\InformCC\CCTextFilterFiles.config"))
+                    File.Copy(strCCDir + @"\\CCTextFilterFiles.config", strInstallDir + strCCSubDir + @"\InformCC\CCTextFilterFiles.config");
+
+
+                DebugWrite("Settings copied.");
+            }
+
+            // Check web.config for httpErrors...
+            if (bAMSMode)
+            {
+                FixWebConfigForHttpErrors(strInstallDir + strCCSubDir + @"\web.config");
+                FixWebConfigForHandlers(strInstallDir + strCCSubDir + @"\web.config");
+                FixWebConfigForRequestSizeAndBatch(strInstallDir + strCCSubDir + @"\web.config");
+            }
+            else
+            {
+                FixWebConfigForHttpErrors(strInstallDir + @"\InformCC\web.config");
+                FixWebConfigForHandlers(strInstallDir + @"\InformCC\web.config");
+                FixWebConfigForRequestSizeAndBatch(strInstallDir + @"\InformCC\web.config");
+            }
+
+            // Check if CCUploadService is installed
+            FixCCUploadService(strInstallDir, strDataDir, strCCDir, strName);
+
+            // check if db needs update
+            if (File.Exists(strCCDir + "\\database\\updatedb.cmd") && chkUpgradeDatabase.Checked)
+            {
+                UpgradeDb(strInstallDir, strCCDir, strCCSubDir);
+            }
+
+            if (File.Exists(strInstallDir + strCCSubDir + @"\InformCC\TextSettings.xml"))
+            {
+                SetWritePermission(strInstallDir + strCCSubDir + @"\InformCC\TextSettings.xml", false);
+            }
+            if (File.Exists(strCCDir + @"\\SavedSelectionTemplates.xml")
+                && !File.Exists(strInstallDir + strCCSubDir + @"\InformCC\SavedSelectionTemplates.xml"))
+            {
+                File.Copy(strCCDir + @"\\SavedSelectionTemplates.xml", strInstallDir + strCCSubDir + @"\InformCC\SavedSelectionTemplates.xml");
+                SetWritePermission(strInstallDir + strCCSubDir + @"\InformCC\SavedSelectionTemplates.xml", false);
+            }
+            if (File.Exists(strCCDir + @"\\BrailleDictionaries.xml")
+                && !File.Exists(strInstallDir + strCCSubDir + @"\InformCC\BrailleDictionaries.xml"))
+            {
+                File.Copy(strCCDir + @"\\BrailleDictionaries.xml", strInstallDir + strCCSubDir + @"\InformCC\BrailleDictionaries.xml");
+            }
+
+            if (File.Exists(strCCDir + @"\\gcsettings.xml")
+                && !File.Exists(strInstallDir + strCCSubDir + @"\InformCC\gcsettings.xml"))
+            {
+                File.Copy(strCCDir + @"\\gcsettings.xml", strInstallDir + strCCSubDir + @"\InformCC\gcsettings.xml");
+            }
+            UpdateManual(strInstallDir, strCCDir, strCCSubDir, "Text");
+            UpdateManual(strInstallDir, strCCDir, strCCSubDir, "Graphic");
+
+            if (!bInstall)
+            {
+                if (!bAMSMode)
+                {
+                    MoveTempFromAppFolder(strInstallDir + @"\InformCC", "temp", strDataDir + "CCtemp", strName);
+
+                }
+                if (bAMSMode)
+                {
+                    MoveTempFromAppFolder(strInstallDir + @"\DC20\InformCC", "temp", strDataDir + "CCtemp", strName);
+                    MoveTempFromAppFolder(strInstallDir + @"\DC20", "InfoPathPreviews", strDataDir + "InfoPathPreviews", strName);
+                    MoveTempFromAppFolder(strInstallDir + @"\DC20", "Notes_Temp", strDataDir + "Notes_Temp", strName);
+                    MoveTempFromAppFolder(strInstallDir + @"\DC20", "Report_Temp", strDataDir + "Report_Temp", strName);
+                }
+                // Create scannerjobs folder...
+                CreateAppFolder("ScannerJobs", strDataDir + "ScannerJobs", strName);
+                // Update ccengine log...
+                UpdateCcengineconfig(strInstallDir + @"\CCEngine\CCEngine.exe.config", strInstallDir, strDataDir);
+            }
+
+
+            if (bInstall || chkUpgradeFontDefs.Checked)
+            {
+                DebugWrite("Fixing font defs.");
+                IfExistsDelete(strInstallDir + strCCSubDir + @"\InformCC\bin\ccfontdefs.dat");
+                IfExistsDelete(strInstallDir + strCCSubDir + @"\InformCC\bin\uc_defs.dat");
+                IfExistsDelete(strInstallDir + strCCSubDir + @"\InformCC\bin\uc_defs_breakingchars.dat");
+                IfExistsDelete(strInstallDir + strCCSubDir + @"\InformCC\bin\uc_defs_bulletchars.dat");
+                IfExistsDelete(strInstallDir + strCCSubDir + @"\InformCC\bin\uc_defs_ignoredecomp.dat");
+                IfExistsDelete(strInstallDir + strCCSubDir + @"\InformCC\bin\GlyphList.txt");
+                IfExistsDelete(strInstallDir + strCCSubDir + @"\InformCC\bin\xpdfrc");
+
+                File.Copy(strCCDir + @"\\ccfontdefs.dat", strInstallDir + strCCSubDir + @"\InformCC\bin\ccfontdefs.dat");
+                File.Copy(strCCDir + @"\\xpdfrc", strInstallDir + strCCSubDir + @"\InformCC\bin\xpdfrc");
+                File.Copy(strCCDir + @"\\uc_defs.dat", strInstallDir + strCCSubDir + @"\InformCC\bin\uc_defs.dat");
+                File.Copy(strCCDir + @"\\uc_defs_breakingchars.dat", strInstallDir + strCCSubDir + @"\InformCC\bin\uc_defs_breakingchars.dat");
+                File.Copy(strCCDir + @"\\uc_defs_bulletchars.dat", strInstallDir + strCCSubDir + @"\InformCC\bin\uc_defs_bulletchars.dat");
+                File.Copy(strCCDir + @"\\uc_defs_ignoredecomp.dat", strInstallDir + strCCSubDir + @"\InformCC\bin\uc_defs_ignoredecomp.dat");
+                File.Copy(strCCDir + @"\\GlyphList.txt", strInstallDir + strCCSubDir + @"\InformCC\bin\GlyphList.txt");
+                DebugWrite("Fixed font defs.");
+                if (!Directory.Exists(Environment.GetFolderPath(Environment.SpecialFolder.ProgramFiles) + @"\XpdfRasterizerCom\") || !Environment.GetFolderPath(Environment.SpecialFolder.ProgramFiles).ToLower().StartsWith("c:\\program files"))
+                {
+                    MessageOutput("Check that the file paths is correct in " + strInstallDir + @"\InformCC\bin\xpdfrc, then click ok.");
+                    MessageOutput(@"Also check that file paths is correct in C:\program files\xpdfrasterizercom\xpdfrc, then click ok.");
+                }
+            }
+            if (!File.Exists(strInstallDir + strCCSubDir + @"\InformCC\bin\uc_defs_breakingchars.dat"))
+            {
+                // Upgrade from 3.4.x or older...
+                File.Copy(strCCDir + @"\\uc_defs_breakingchars.dat", strInstallDir + strCCSubDir + @"\InformCC\bin\uc_defs_breakingchars.dat");
+            }
+            if (!File.Exists(strInstallDir + strCCSubDir + @"\InformCC\bin\uc_defs_bulletchars.dat"))
+            {
+                // Upgrade from 3.5.x or older...
+                File.Copy(strCCDir + @"\\uc_defs_bulletchars.dat", strInstallDir + strCCSubDir + @"\InformCC\bin\uc_defs_bulletchars.dat");
+            }
+            // Check if spelling is to be created
+            if (bInstall || !Directory.Exists(strInstallDir + strCCSubDir + @"\InformCC\UltimateSpell"))
+            {
+                CreateDirectory(strInstallDir + strCCSubDir + @"\InformCC\UltimateSpell");
+                CopyCCFiles(strInstallDir + strCCSubDir + @"\InformCC\UltimateSpell", strCCDir + @"\UltimateSpell");
+                SetWritePermission(strInstallDir + strCCSubDir + @"\InformCC\UltimateSpell\CustomDictionary", true);
+            }
+
+            IfExistsDelete(strInstallDir + @"\\DC20\DCHeader.sitemap");
+            File.Copy(strCCDir + @"\\DCHeader.sitemap", strInstallDir + @"\DC20\DCHeader.sitemap");
+
+            if (!bAMSMode)
+            {
+                IfExistsDelete(strInstallDir + @"\\DC20\DCDefault.aspx");
+                File.Copy(strCCDir + @"\\DCDefault.aspx", strInstallDir + @"\DC20\DCDefault.aspx");
+            }
+            if (!bInstall && Directory.Exists(strCCDir + @"\xpdfrasterizercom"))
+            {
+                if (chkUpgradeXpdf.Checked && AskToDo("Do you want to upgrade xpdf rasterizer (needed if upgrading from 3.1.0 or older) ?"))
+                    InstallXpdf(strCCDir + @"\xpdfrasterizercom");
+            }
+            MakeSureXpdf33InRegistry();
+
+            if (bInstall)
+            {
+                string CCconfig = strInstallDir + @"\InformCC\web.config";
+                if (bAMSMode)
+                {
+                    CCconfig = strInstallDir + strCCSubDir + @"\web.config";
+                }
+                if (chkSetLicenseKey.Checked)
+                {
+                    CCLicense ccl = new CCLicense(CCconfig, false);
+                    ccl.FileName = CCconfig;
+                    ccl.LicenseKey = txtLicenseKey.Text;
+                    ccl.SaveCCLicense();
+                }
+                else
+                {
+                    CCLicense ccl = new CCLicense(CCconfig, true);
+                    ccl.ShowDialog();
+                }
+            }
+
+            // Start services
+            StartService(strInstallDir + "\\CCEngine", "CCEngine");
+            if (bAMSMode)
+            {
+                StartService(strInstallDir + "\\InformWFService", "InForm Workflow Service");
+            }
+
+            MessageOutput("Finished!");
+        }
+
+        private void FixCCUploadService(string strInstallDir, string strDataDir, string strSrcDir, string strName)
+        {
+            ServerManager iisManager = new ServerManager();
+            Site s = iisManager.Sites[0];
+            if (s.Applications["/" + strName + "/InformCC"] != null)
+            {
+                if (s.Applications["/" + strName + "/CCUploadService"] == null)
+                {
+                    Application ccUplApp = s.Applications.Add("/" + strName + "/CCUploadService", strInstallDir + "\\CCUploadService");
+                    ccUplApp.VirtualDirectories.Add("/ScannerJobs", strDataDir + "ScannerJobs");
+                    ccUplApp.ApplicationPoolName = strName;
+                    iisManager.CommitChanges();
+                    if (!File.Exists(strInstallDir + @"\CCUploadService\web.config"))
+                    {
+                        File.Copy(strSrcDir + @"\CCUploadService.config", strInstallDir + @"\CCUploadService\web.config");
+                        FixConfigInWorkflow(strInstallDir + @"\" + (bAMSMode ? "DC20" : "InformCC") + @"\web.config", strInstallDir + @"\CCUploadService\web.config");
+                        FixConfigLogFile(strInstallDir + @"\" + (bAMSMode ? "DC20" : "InformCC") + @"\web.config", strInstallDir + @"\CCUploadService\web.config");
+                    }
+                }
+            }
+        }
+
+        private void FixXpdfInCCEngine(string strCCEngineInstDir)
+        {
+            if (File.Exists(strCCEngineInstDir + "\\XpdfRasterizerNet.dll"))
+                File.Delete(strCCEngineInstDir + "\\XpdfRasterizerNet.dll");
+
+            if (Is64bit())
+            {
+                if (File.Exists(strCCEngineInstDir + "\\XpdfRasterizer.dll"))
+                    File.Delete(strCCEngineInstDir + "\\XpdfRasterizer.dll");
+                if (File.Exists(strCCEngineInstDir + "\\XpdfRasterizer64.dll"))
+                    File.Move(strCCEngineInstDir + "\\XpdfRasterizer64.dll", strCCEngineInstDir + "\\XpdfRasterizer.dll");
+            }
+
+        }
+
+        private void UpdateCcengineconfig(string configFileName, string strInstallDir, string strDataDir)
+        {
+            XmlDocument doc = new XmlDocument();
+            doc.Load(configFileName);
+            XmlNode xnWF = doc.SelectSingleNode("//add[@key=\"WorkFolder\"]");
+            if (xnWF != null)
+            {
+                xnWF.Attributes["value"].Value = strDataDir + @"\CCTemp\";
+            }
+            doc.Save(configFileName);
+        }
+
+        private void MoveTempFromAppFolder(string strInstallDir, string tempName, string newTempDir, string strName)
+        {
+            // Check if temp folder in ccsubdir, if not then exit
+            if (!Directory.Exists(strInstallDir + @"\" + tempName))
+                return;
+            CreateAppFolder(tempName, newTempDir, strName);
+        }
+
+        private void CreateAppFolder(string tempName, string newTempDir, string strName)
+        {
+            if (Directory.Exists(newTempDir))
+            {
+                return;
+            }
+            Directory.CreateDirectory(newTempDir);
+            SetWritePermission(newTempDir, true);
+
+            UpdateIISTempDirs(strName, tempName, newTempDir);
+        }
+
+        private bool UpdateIISTempDirs(string appName, string tempName, string newTempDir)
+        {
+            ServerManager iisManager = new ServerManager();
+            bool bFound = false;
+            foreach (ApplicationPool apTmp in iisManager.ApplicationPools)
+            {
+                if (apTmp.Name.Equals(appName, StringComparison.CurrentCultureIgnoreCase))
+                {
+                    bFound = true;
+                    break;
+                }
+            }
+            if (!bFound)
+            {
+                return false;
+            }
+            // OK pool found, now let's find the application
+            ApplicationPool ap = iisManager.ApplicationPools[appName];
+
+            // update runtime to 4.0
+            ap.ManagedRuntimeVersion = "v4.0";
+            iisManager.CommitChanges();
+
+            Site s = iisManager.Sites[0]; // this is default site...
+            if (s == null)
+            {
+                return false;
+            }
+            string appPath = "/" + appName + "/InformCC";
+            if (bAMSMode)
+            {
+                appPath = "/" + appName + "/DC20/InformCC";
+            }
+            Application ccApp = s.Applications[appPath];
+            if (ccApp == null)
+            {
+                return false;
+            }
+            if (ccApp.VirtualDirectories["/" + tempName] != null)
+            {
+                return false;
+            }
+            ccApp.VirtualDirectories.Add("/" + tempName, newTempDir);
+            iisManager.CommitChanges();
+            return true;
+        }
+        /// <summary>
+        /// 
+        /// </summary>
+        /// <param name="strName"></param>
+        /// <returns>dir with trailing backslash</returns>
+        private string GetDataDir(string strName)
+        {
+            string strDataDir = txtCCDataDir.Text;
+            if (!strDataDir.EndsWith("\\"))
+                strDataDir += "\\";
+            strDataDir += strName + "\\";
+            return strDataDir;
+        }
+
+        private void MakeSureXpdf33InRegistry()
+        {
+            // Check keys are there...
+            using (RegistryKey key = Registry.LocalMachine.OpenSubKey(@"SOFTWARE\Classes\TypeLib\{9E7E7B0D-1046-4DE0-A814-67ABD93FC82E}", true))
+            {
+                if (key.OpenSubKey("3.3") != null)
+                {
+                    return;
+                }
+                using (RegistryKey subkey = key.CreateSubKey("3.3"))
+                {
+                    string val = "XpdfRasterizer Type Library";
+                    subkey.SetValue("", val);
+                    using (RegistryKey subkey0 = subkey.CreateSubKey("0"))
+                    {
+                        using (RegistryKey subkey0win64 = subkey0.CreateSubKey("win64"))
+                        {
+                            string valPath = "d:\\dummypath\\com64\\XpdfRasterizer.dll";
+                            subkey0win64.SetValue("", valPath);
+                        }
+                    }
+                    using (RegistryKey subkeyFlags = subkey.CreateSubKey("FLAGS"))
+                    {
+                        string valFlag = "0";
+                        subkeyFlags.SetValue("", valFlag);
+                    }
+                    using (RegistryKey subkeyHelpDir = subkey.CreateSubKey("HELPDIR"))
+                    {
+                        string valPath = "d:\\dummypath\\com64\\XpdfRasterizer.dll";
+                        subkeyHelpDir.SetValue("", valPath);
+                    }
+
+                }
+            }
+        }
+
+        private void FixWebConfigForRequestSizeAndBatch(string configFile)
+        {
+            /// Set default minimum size to 256 MB
+            string strXMLAll = File.ReadAllText(configFile);
+
+            if (!strXMLAll.Contains("maxAllowedContentLength"))
+            {
+                strXMLAll = strXMLAll.Replace("</system.webServer>", "<security><requestFiltering><requestLimits maxAllowedContentLength=\"256000000\" /></requestFiltering></security></system.webServer>");
+                File.WriteAllText(configFile, strXMLAll);
+            }
+            if (strXMLAll.Contains("maxRequestLength=\"64234\""))
+            {
+                strXMLAll = strXMLAll.Replace("maxRequestLength=\"64234\"", "maxRequestLength=\"256000\"");
+                File.WriteAllText(configFile, strXMLAll);
+            }
+            if (!strXMLAll.Contains("requestValidationMode=\"2.0\""))
+            {
+                strXMLAll = strXMLAll.Replace("maxRequestLength=\"256000\"", "maxRequestLength=\"256000\" requestValidationMode=\"2.0\"");
+                File.WriteAllText(configFile, strXMLAll);
+            }
+            if (!strXMLAll.Contains("batch=\"false\">"))
+            {
+                XmlDocument doc = new XmlDocument();
+                doc.Load(configFile);
+                XmlNode xn = doc.ChildNodes[1];
+                foreach (XmlNode xnChild in xn.ChildNodes)
+                {
+                    if (xnChild.Name == "system.web")
+                    {
+                        if (xnChild.SelectSingleNode("*[local-name()='compilation']").Attributes["batch"] == null)
+                            xnChild.SelectSingleNode("*[local-name()='compilation']").Attributes.Append(doc.CreateAttribute("batch")).InnerText = "false";
+                        break;
+                    }
+                }
+                XmlWriterSettings confSett = new XmlWriterSettings();
+                confSett.Indent = true;
+                confSett.NewLineHandling = NewLineHandling.Entitize;
+
+                XmlWriter xw = XmlWriter.Create(configFile, confSett);
+                doc.Save(xw);
+                xw.Flush();
+                xw.Close();
+            }
+        }
+        /// <summary>
+        /// This is because sometimes vic dlls are locked.
+        /// </summary>
+        /// <param name="p"></param>
+        /// <returns></returns>
+        private bool CheckVicDllsWritable(string p)
+        {
+            bool bLocked = false;
+            while (true)
+            {
+                if (File.Exists(p + "\\vic32.dll"))
+                {
+                    try
+                    {
+                        FileStream io = File.Open(p + "\\vic32.dll", FileMode.Create, FileAccess.Write, FileShare.None);
+                        io.Close();
+                    }
+                    catch
+                    {
+                        bLocked = true;
+                    }
+                }
+                if (!bLocked && File.Exists(p + "\\vic64.dll"))
+                {
+                    try
+                    {
+                        FileStream io = File.Open(p + "\\vic64.dll", FileMode.Create, FileAccess.Write, FileShare.None);
+                        io.Close();
+                    }
+                    catch
+                    {
+                        bLocked = true;
+                    }
+                }
+                if (!bLocked)
+                    break;
+
+                MessageOutput("Files are locked, please recycle the worker process in Internet Information Services Administrator.");
+                return false;
+            }
+            return true;
+        }
+
+        private static void UpdateManual(string strInstallDir, string strCCDir, string strCCSubDir, string strType)
+        {
+            if (File.Exists(strCCDir + @"\\InformCCManual" + strType + ".pdf"))
+            {
+                // Install or upgrade manual!
+                if (File.Exists(strInstallDir + strCCSubDir + @"\InformCC\InformCCManual.pdf"))
+                {
+                    File.Delete(strInstallDir + strCCSubDir + @"\InformCC\InformCCManual.pdf");
+                }
+                File.Copy(strCCDir + @"\\InformCCManual" + strType + ".pdf", strInstallDir + strCCSubDir + @"\InformCC\InformCCManual" + strType + ".pdf", true);
+            }
+        }
+
+        private void FixWebConfigForHandlers(string configFile)
+        {
+            string strXMLAll = File.ReadAllText(configFile);
+
+            if (!strXMLAll.Contains("aspnet:MaxHttpCollectionKeys"))
+            {
+                // 36000 number of controls in the postback is a lot (A LOT) of deviations...
+                strXMLAll = strXMLAll.Replace("</appSettings>", @"<add key=""aspnet:MaxHttpCollectionKeys"" value=""36000"" /></appSettings>");
+                File.WriteAllText(configFile, strXMLAll);
+            }
+            if (!strXMLAll.Contains("<webServices>"))
+            {
+                strXMLAll = strXMLAll.Replace("<httpRuntime", @"<webServices><protocols><add name=""HttpGet""/><add name=""HttpPost""/></protocols></webServices>" + Environment.NewLine + "<httpRuntime");
+                File.WriteAllText(configFile, strXMLAll);
+            }
+            if (GetIISVersion() <= 6)
+            {
+                if (!strXMLAll.Contains("httpHandlers"))
+                {
+                    // This will only work with Classic mode (IIS6).
+                    strXMLAll = strXMLAll.Replace("</system.web>",
+                        @"<httpHandlers><add verb=""*"" path=""*.asmx"" type=""System.Web.Script.Services.ScriptHandlerFactory,System.Web.Extensions,Version=3.5.0.0,Culture=neutral,PublicKeyToken=31BF3856AD364E35"" /></httpHandlers>" +
+                        Environment.NewLine + "</system.web>");
+                    File.WriteAllText(configFile, strXMLAll);
+                }
+            }
+            if (!strXMLAll.Contains("asmxCustom"))
+            {
+                strXMLAll = strXMLAll.Replace("</system.webServer>", @"<handlers><add name=""asmxCustom"" verb=""*"" path=""*.asmx"" type=""System.Web.Script.Services.ScriptHandlerFactory,System.Web.Extensions,Version=3.5.0.0,Culture=neutral,PublicKeyToken=31BF3856AD364E35"" /></handlers></system.webServer>");
+                File.WriteAllText(configFile, strXMLAll);
+            }
+            if (strXMLAll.Contains("System.Web.Configuration.ScriptingJsonSerializationSection"))
+            {
+                // In .net 4.0 we don't want this extension
+                XmlDocument doc = new XmlDocument();
+                doc.Load(configFile);
+                XmlNodeList xnConfigSections = doc.GetElementsByTagName("sectionGroup");
+                foreach (XmlNode xn in xnConfigSections)
+                {
+                    if (xn.Attributes["name"] != null && xn.Attributes["name"].Value == "system.web.extensions")
+                    {
+                        xn.ParentNode.RemoveChild(xn);
+                        break;
+                    }
+                }
+                doc.Save(configFile);
+                doc = null;
+                strXMLAll = File.ReadAllText(configFile);
+            }
+            if (!strXMLAll.Contains("maxJsonLength"))
+            {
+                strXMLAll = strXMLAll.Replace("</appSettings>", @"</appSettings>" + Environment.NewLine + @"<system.web.extensions><scripting><webServices><jsonSerialization maxJsonLength=""10000000""/></webServices></scripting></system.web.extensions>" + Environment.NewLine);
+                File.WriteAllText(configFile, strXMLAll);
+            }
+            if (!strXMLAll.Contains("InformCCSPLUploadFile.asmx"))
+            {
+                strXMLAll = strXMLAll.Substring(0, strXMLAll.LastIndexOf("<system.web>")) +
+                            strXMLAll.Substring(strXMLAll.LastIndexOf("<system.web>"))
+                                .Replace("<system.web>",
+                                    @"<location path=""InformCCSPLUploadFile.asmx""><system.web   ><authorization><allow users=""*""/></authorization></system.web></location>" +
+                                    Environment.NewLine + "<system.web>");
+
+                File.WriteAllText(configFile, strXMLAll);
+            }
+            if (!strXMLAll.Contains("CustomCss.ashx"))
+            {
+                strXMLAll = strXMLAll.Substring(0, strXMLAll.LastIndexOf("<system.web>")) +
+                            strXMLAll.Substring(strXMLAll.LastIndexOf("<system.web>"))
+                                .Replace("<system.web>",
+                                    @"<location path=""CustomCss.ashx""><system.web   ><authorization><allow users=""*""/></authorization></system.web></location>" +
+                                    Environment.NewLine + "<system.web>");
+
+                File.WriteAllText(configFile, strXMLAll);
+            }
+
+            if (!strXMLAll.Contains("application/font-woff"))
+            {
+                // Add google fonts...
+                strXMLAll = strXMLAll.Substring(0, strXMLAll.LastIndexOf("</system.webServer>")) +
+                            strXMLAll.Substring(strXMLAll.LastIndexOf("</system.webServer>"))
+                                .Replace("</system.webServer>",
+                                    @"<staticContent><mimeMap fileExtension="".woff"" mimeType=""application/font-woff"" /><mimeMap fileExtension="".woff2"" mimeType=""application/font-woff2"" /></staticContent>" +
+                                    Environment.NewLine + "</system.webServer>");
+
+                File.WriteAllText(configFile, strXMLAll);
+            }
+
+        }
+
+
+
+        private void UpgradeDb(string strInstallDir, string strCCDir, string strCCSubDir)
+        {
+            string CCconfig = strInstallDir + @"\InformCC\web.config";
+            if (bAMSMode)
+            {
+                CCconfig = strInstallDir + strCCSubDir + @"\web.config";
+            }
+            // Get connection from current web.config
+            string strConn = "";
+            string strConnSec = "";
+            clsSpecifyDatabase.GetConnectionStringsFromConfig(CCconfig, ref strConn, ref strConnSec);
+            string strFileUpdate = File.ReadAllText(strCCDir + "\\database\\updatedb.cmd");
+            if (strConn.Contains("Provider=SQLServer"))
+            {
+                SqlConnectionStringBuilder sb = new SqlConnectionStringBuilder(strConn.Substring("Provider=SQLServer".Length));
+                strFileUpdate = string.Format(strFileUpdate, "SQL", sb.DataSource, sb.InitialCatalog, sb.UserID, sb.Password);
+            }
+            else if (strConn.Contains("Provider=Oracle"))
+            {
+                OracleConnectionStringBuilder sb = new OracleConnectionStringBuilder(strConn.Substring("Provider=Oracle".Length));
+                strFileUpdate = string.Format(strFileUpdate, "ORA", sb.DataSource, "", sb.UserID, sb.Password);
+            }
+            string strScriptToRun = strCCDir + "\\database\\updatedbfixed.cmd";
+            if (File.Exists(strScriptToRun))
+                File.Delete(strScriptToRun);
+            File.WriteAllText(strScriptToRun, strFileUpdate);
+
+            ProcessStartInfo psi = new ProcessStartInfo(strScriptToRun);
+            psi.WorkingDirectory = strCCDir + "\\database\\";
+            Process p = new Process();
+            p.StartInfo = psi;
+            p.Start();
+            string stdout = "";
+            try
+            {
+                stdout = p.StandardOutput.ReadToEnd();
+            }
+            catch
+            {
+            }
+            p.WaitForExit();
+        }
+
+        private void FixWebConfigForHttpErrors(string configFile)
+        {
+            string strXMLAll = File.ReadAllText(configFile);
+
+            if (!strXMLAll.Contains("<httpErrors"))
+            {
+                if (!strXMLAll.Contains("system.webServer"))
+                {
+                    strXMLAll = strXMLAll.Replace("</configuration>", @"<system.webServer><httpErrors errorMode=""Detailed""/></system.webServer></configuration>");
+
+                }
+                else
+                {
+                    strXMLAll = strXMLAll.Replace("</system.webServer>", @"<httpErrors errorMode=""Detailed""/></system.webServer>");
+
+                }
+
+            }
+            File.WriteAllText(configFile, strXMLAll);
+            XmlDocument doc = new XmlDocument();
+            doc.Load(configFile);
+
+            if (doc.DocumentElement != null && doc.GetElementsByTagName("customErrors").Count > 0)
+            {
+                XmlNodeList projectNodes = doc.GetElementsByTagName("customErrors");
+                for (int i = 0; i < projectNodes.Count; i++)
+                {
+                    var parentNode = projectNodes[i].ParentNode;
+                    if (parentNode != null)
+                    {
+                        parentNode.RemoveChild(projectNodes[i]);
+                    }
+                }
+            }
+            XmlElement custErr = doc.CreateElement("customErrors", doc.DocumentElement.NamespaceURI);
+            XmlElement error1 = doc.CreateElement("error", doc.DocumentElement.NamespaceURI);
+            XmlElement error2 = doc.CreateElement("error", doc.DocumentElement.NamespaceURI);
+            custErr.SetAttribute("mode", "On");
+            custErr.SetAttribute("defaultRedirect", "LMSError.aspx");
+            error1.SetAttribute("statusCode", "401");
+            error1.SetAttribute("redirect", "LMSError.aspx");
+            error2.SetAttribute("statusCode", "404");
+            error2.SetAttribute("redirect", "LMSError.aspx?pageExist=false");
+            custErr.AppendChild(error1);
+            custErr.AppendChild(error2);
+            if (!strXMLAll.Contains("system.webServer"))
+            {
+                if (doc.DocumentElement != null)
+                {
+                    XmlElement mapElement = (XmlElement)doc.SelectSingleNode(@"/*[local-name()='configuration']");
+                    mapElement.AppendChild(custErr);
+                }
+            }
+            else
+            {
+                if (doc.DocumentElement != null)
+                {
+                    XmlElement mapElement = (XmlElement)doc.SelectSingleNode(@"/*[local-name()='configuration']/*[local-name()='system.web']");
+                    mapElement.AppendChild(custErr);
+                }
+            }
+            doc.Save(configFile);
+
+        }
+
+        private void InstallCrystalReports(string strCRruntimePath)
+        {
+            strCRruntimePath += Is64bit() ? "CRRedist2005_X64.msi" : "CRRedist2005_x86.msi";
+            if (File.Exists(strCRruntimePath) && AskToDo("Do you want to install Crystal Reports runtime?"))
+            {
+                DebugWrite("Crystal Reports Runtime to be installed.");
+
+                ProcessStartInfo psi = new ProcessStartInfo(Environment.GetFolderPath(Environment.SpecialFolder.System) + "\\msiexec.exe");
+                psi.Arguments = string.Format("/i \"{0}\" /quiet", strCRruntimePath);
+                Process installService = new Process();
+                installService.StartInfo = psi;
+
+                installService.Start();
+                installService.WaitForExit();
+            }
+            DebugWrite("Crystal Reports Runtime installed.");
+        }
+
+        private void FixDMWrapper(string strCCDir, string strInstallDirDM)
+        {
+            if (Is64bit())
+            {
+                if (File.Exists(strCCDir + @"\\DM.SecUtils64.dll"))
+                {
+                    File.Copy(strCCDir + @"\\DM.SecUtils64.dll", strInstallDirDM + @"\DM.SecUtils64.dll", true);
+                    if (File.Exists(strInstallDirDM + @"\DM.SecUtils32.dll"))
+                        File.Delete(strInstallDirDM + @"\DM.SecUtils32.dll");
+                }
+            }
+            else
+            {
+                if (File.Exists(strCCDir + @"\\DM.SecUtils32.dll"))
+                {
+                    File.Copy(strCCDir + @"\\DM.SecUtils32.dll", strInstallDirDM + @"\DM.SecUtils32.dll", true);
+                    if (File.Exists(strInstallDirDM + @"\DM.SecUtils64.dll"))
+                        File.Delete(strInstallDirDM + @"\DM.SecUtils64.dll");
+                }
+            }
+        }
+
+        private void FixConfigInWorkflow(string newConfigFile, string serviceConfigFile)
+        {
+            XmlDocument docNewConfig = new XmlDocument();
+            docNewConfig.Load(newConfigFile);
+            XmlNode xnNewConfig = docNewConfig.GetElementsByTagName("LILGlobals.Properties.Settings")[0];
+
+            XmlDocument doc = new XmlDocument();
+            doc.Load(serviceConfigFile);
+            XmlNode xn = doc.GetElementsByTagName("LILGlobals.Properties.Settings")[0];
+            xn.ChildNodes[0].FirstChild.InnerText = xnNewConfig.ChildNodes[0].FirstChild.InnerText;
+            xn.ChildNodes[1].FirstChild.InnerText = xnNewConfig.ChildNodes[1].FirstChild.InnerText;
+            doc.Save(serviceConfigFile);
+            doc = null;
+        }
+
+        private void FixConfigLogFile(string newConfigFile, string serviceConfigFile)
+        {
+            XmlDocument docNewConfig = new XmlDocument();
+            docNewConfig.Load(newConfigFile);
+            XmlNode xnNewConfig = docNewConfig.GetElementsByTagName("LILGlobals.Properties.Settings")[0];
+
+            XmlDocument doc = new XmlDocument();
+            doc.Load(serviceConfigFile);
+            XmlNode xn = doc.GetElementsByTagName("LILGlobals.Properties.Settings")[0];
+            xn.SelectSingleNode("*[@name='LogFile']").FirstChild.InnerText = 
+                xnNewConfig.SelectSingleNode("*[@name='LogFile']").FirstChild.InnerText;
+            doc.Save(serviceConfigFile);
+            doc = null;
+        }
+
+        private void CreateDirectory(string strNewDir)
+        {
+            DebugWrite("Creating directory " + strNewDir);
+            if (!Directory.Exists(strNewDir))
+                Directory.CreateDirectory(strNewDir);
+        }
+
+        private bool AskToDo(string p)
+        {
+            if (!chkAdvanced.Checked)
+                return true;
+            if (MessageBox.Show(p, "CC Installer", MessageBoxButtons.YesNo) == DialogResult.Yes)
+                return true;
+            return false;
+        }
+
+        private void DebugWrite(string p)
+        {
+            txtDebug.Text = txtDebug.Text + "\r\n" + p;
+        }
+
+        private void IfExistsDelete(string file)
+        {
+            if (File.Exists(file))
+                File.Move(file, file + "." + DateTime.Now.Ticks);
+        }
+
+        private void FixWebConfigDlg(string p)
+        {
+            frmEditWebConfig ewc = new frmEditWebConfig();
+            ewc.SetFile(p);
+            if (IsInteractive)
+            {
+                ewc.ShowDialog(this);
+            }
+            else
+            {
+                ewc.DbConnection = DbConnection;
+                ewc.DbConnectionSec = DbConnectionSec;
+                ewc.SaveNewConnectionDetails();
+            }
+        }
+
+        private void FixLogDirectoryAndUniqueKey(string strAppName, string strLogFile, string strFileName)
+        {
+            XmlDocument doc = new XmlDocument();
+            doc.Load(strFileName);
+            XmlNode xn = doc.ChildNodes[1];
+            foreach (XmlNode xnChild in xn.ChildNodes)
+            {
+                if (xnChild.Name == "applicationSettings")
+                {
+                    foreach (XmlNode xnChild2 in xnChild.ChildNodes)
+                    {
+                        if (xnChild2.Name == "LILGlobals.Properties.Settings")
+                        {
+                            foreach (XmlNode xnChild3 in xnChild2.ChildNodes)
+                            {
+                                if (xnChild3.Attributes["name"].InnerText == "LogFile")
+                                {
+                                    xnChild3.FirstChild.InnerText = strLogFile;
+                                }
+                                if (xnChild3.Attributes["name"].InnerText == "InformaApp")
+                                {
+                                    xnChild3.FirstChild.InnerText = strAppName;
+                                }
+                            }
+                        }
+                    }
+                }
+                if (xnChild.Name == "system.web")
+                {
+                    xnChild.SelectSingleNode("*[local-name()='machineKey']").Attributes["validationKey"].InnerText = getRandomKey(24);
+                    xnChild.SelectSingleNode("*[local-name()='machineKey']").Attributes["decryptionKey"].InnerText = getRandomKey(24);
+                }
+            }
+            XmlWriterSettings confSett = new XmlWriterSettings();
+            confSett.Indent = true;
+            confSett.NewLineHandling = NewLineHandling.Entitize;
+
+            XmlWriter xw = XmlWriter.Create(strFileName, confSett);
+            doc.Save(xw);
+            xw.Flush();
+            xw.Close();
+        }
+
+        private string getRandomKey(int byteLength)
+        {
+            byte[] buff = new byte[byteLength];
+            RNGCryptoServiceProvider rng = new RNGCryptoServiceProvider();
+            rng.GetBytes(buff);
+            StringBuilder sb = new StringBuilder(byteLength * 2);
+            for (int i = 0; i < buff.Length; i++)
+                sb.Append(string.Format("{0:X2}", buff[i]));
+            return sb.ToString();
+        }
+
+        public void StartService(string strInstPath, string serviceName)
+        {
+            RunServiceCommand(strInstPath, serviceName, "start", "Starting service ");
+        }
+
+        public void StopService(string strInstPath, string serviceName)
+        {
+            RunServiceCommand(strInstPath, serviceName, "stop", "Stopping service ");
+        }
+
+        private void RunServiceCommand(string strInstPath, string serviceName, string command, string debugMessage)
+        {
+            List<string> services = GetServicesForPath(strInstPath, serviceName);
+            foreach (var service in services)
+            {
+                DebugWrite(debugMessage + service);
+            }
+            Parallel.ForEach(services, strName =>
+            {
+                ProcessStartInfo psi = new ProcessStartInfo("net") { Arguments = command + " \"" + strName + "\"" };
+                Process process = new Process { StartInfo = psi };
+                process.Start();
+                process.WaitForExit();
+            });
+        }
+
+        /// <summary>
+        ///  This requires Metabase compatibility to be installed (on vista and 2008 server)
+        /// </summary>
+        /// <param name="strName"></param>
+        /// <param name="strInstallPath"></param>
+        private void FixIISApp(string strName, string strInstallPath)
+        {
+            if (Environment.OSVersion.Version.Major >= 6)
+            {
+                FixIISAppNew(strName, strInstallPath);
+                return;
+            }
+
+            string strSchema = "IIsWebVirtualDir";
+            string strRootSubPath = "/W3SVC/1/Root";
+            string strDataDir = GetDataDir(strName);
+
+            DirectoryEntry deRoot = new DirectoryEntry("IIS://localhost" + strRootSubPath);
+            try
+            {
+                deRoot.RefreshCache();
+                DirectoryEntry deNewVDir = deRoot.Children.Add(strName, strSchema);
+                deNewVDir.Properties["Path"].Insert(0, strInstallPath);
+                deNewVDir.CommitChanges();
+                deRoot.CommitChanges();
+
+                ProcessStartInfo psi = new ProcessStartInfo(RuntimeEnvironment.GetRuntimeDirectory() + "\\aspnet_regiis.exe");
+                psi.Arguments = " -sn W3SVC/1/Root/" + strName;
+                Process p = new Process();
+                p.StartInfo = psi;
+                p.Start();
+                p.WaitForExit();
+                if (!bAMSMode)
+                {
+                    DirectoryEntry entry = deNewVDir.Children.Add("InformCC", "IIsWebDirectory");
+                    entry.Invoke("AppCreate2", 2);
+                    entry.Properties["AppFriendlyName"].Value = "InformCC";
+
+                    DirectoryEntry tempDir = entry.Children.Add("temp", strSchema);
+                    tempDir.Properties["Path"].Insert(0, strDataDir + "CCtemp");
+                    tempDir.CommitChanges();
+
+                    entry.CommitChanges();
+                }
+
+                DirectoryEntry entry2 = deNewVDir.Children.Add("DC20", "IIsWebDirectory");
+                entry2.Invoke("AppCreate2", 2);
+                entry2.Properties["AppFriendlyName"].Value = "DC20";
+                entry2.CommitChanges();
+
+                if (bAMSMode)
+                {
+                    DirectoryEntry reporttempDir = entry2.Children.Add("Report_temp", strSchema);
+                    reporttempDir.Properties["Path"].Insert(0, strDataDir + "Report_temp");
+                    reporttempDir.CommitChanges();
+
+                    DirectoryEntry infopathTempDir = entry2.Children.Add("InfoPathPreviews", strSchema);
+                    infopathTempDir.Properties["Path"].Insert(0, strDataDir + "InfoPathPreviews");
+                    infopathTempDir.CommitChanges();
+
+
+                    DirectoryEntry entry = entry2.Children.Add("InformCC", "IIsWebDirectory");
+                    entry.Invoke("AppCreate2", 2);
+                    entry.Properties["AppFriendlyName"].Value = "InformCC";
+                    entry.CommitChanges();
+
+                    DirectoryEntry tempDir = entry.Children.Add("temp", strSchema);
+                    tempDir.Properties["Path"].Insert(0, strDataDir + "CCtemp");
+                    tempDir.CommitChanges();
+
+                    DirectoryEntry entryRev = entry2.Children.Add("Review", "IIsWebDirectory");
+                    entryRev.Invoke("AppCreate2", 2);
+                    entryRev.Properties["AppFriendlyName"].Value = "Review";
+
+                    DirectoryEntry reviewtempDir = entryRev.Children.Add("Notes_temp", strSchema);
+                    reviewtempDir.Properties["Path"].Insert(0, strDataDir + "Notes_temp");
+                    reviewtempDir.CommitChanges();
+
+                    entryRev.CommitChanges();
+                }
+                if (bWebService)
+                {
+                    DirectoryEntry entryWS = deNewVDir.Children.Add("WS_DC_Integration", "IIsWebDirectory");
+                    entryWS.Invoke("AppCreate2", 2);
+                    entryWS.Properties["AppFriendlyName"].Value = "WS_DC_Integration";
+                    entryWS.CommitChanges();
+                }
+
+                deNewVDir.Close();
+
+                deRoot.Close();
+            }
+            catch (Exception ex)
+            {
+                MessageOutput("IIS could not create virtual directory!" + Environment.NewLine + "(installation will continue anyway and you can do this later)");
+            }
+        }
+
+        private void FixIISAppNew(string strName, string strInstallPath)
+        {
+            string strDataDir = GetDataDir(strName);
+
+            ServerManager iisManager = new ServerManager();
+            bool bFound = false;
+            foreach (ApplicationPool ap in iisManager.ApplicationPools)
+            {
+                if (ap.Name.Equals(strName, StringComparison.CurrentCultureIgnoreCase))
+                {
+                    bFound = true;
+                    break;
+                }
+            }
+            if (!bFound)
+            {
+                ApplicationPool ap = iisManager.ApplicationPools.Add(strName);
+                ap.ManagedRuntimeVersion = "v4.0";
+                ap.ProcessModel.LoadUserProfile = true;
+                iisManager.CommitChanges();
+            }
+            Site s = iisManager.Sites[0]; // this is default site...
+            s.Applications["/"].VirtualDirectories.Add("/" + strName, strInstallPath);
+            if (!bAMSMode)
+            {
+                Application ccApp = s.Applications.Add("/" + strName + "/InformCC", strInstallPath + "\\InformCC");
+                ccApp.VirtualDirectories.Add("/temp", strDataDir + "cctemp");
+                ccApp.VirtualDirectories.Add("/ScannerJobs", strDataDir + "ScannerJobs");
+                ccApp.ApplicationPoolName = strName;
+
+                Application dcApp = s.Applications.Add("/" + strName + "/DC20", strInstallPath + "\\DC20");
+                dcApp.ApplicationPoolName = strName;
+
+            }
+            else
+            {
+                Application dcApp = s.Applications.Add("/" + strName + "/DC20", strInstallPath + "\\DC20");
+                dcApp.ApplicationPoolName = strName;
+
+                dcApp.VirtualDirectories.Add("/Report_temp", strDataDir + "Report_Temp");
+                dcApp.VirtualDirectories.Add("/InfopathPreviews", strDataDir + "InfopathPreviews");
+
+                Application ccApp = s.Applications.Add("/" + strName + "/DC20/InformCC", strInstallPath + "\\DC20\\InformCC");
+                ccApp.VirtualDirectories.Add("/temp", strDataDir + "cctemp");
+                ccApp.VirtualDirectories.Add("/ScannerJobs", strDataDir + "ScannerJobs");
+                ccApp.ApplicationPoolName = strName;
+
+                Application rvApp = s.Applications.Add("/" + strName + "/DC20/Review", strInstallPath + "\\DC20\\Review");
+                rvApp.VirtualDirectories.Add("/Notes_temp", strDataDir + "Notes_temp");
+                rvApp.ApplicationPoolName = strName;
+
+            }
+
+            if (bWebService)
+            {
+                Application wsApp = s.Applications.Add("/" + strName + "/WS_DC_Integration", strInstallPath + "\\WS_DC_Integration");
+                wsApp.ApplicationPoolName = strName;
+            }
+            iisManager.CommitChanges();
+
+        }
+        private void FixCcengineconfig(string strConfig, string strInstallDir, string strDataDir)
+        {
+            string strLogDir = strDataDir + "CCEngine_Log";
+            Directory.CreateDirectory(strLogDir);
+
+            string strXml = @"<?xml version=""1.0"" encoding=""utf-8""?>";
+            strXml += "<configuration>";
+            strXml += "<appSettings>";
+
+            strXml += string.Format(@"<add key=""WorkFolder"" value=""{0}\CCTemp\"" />", strDataDir);
+            strXml += string.Format(@"<add key=""Pause"" value=""{0}"" />", CC_ENGINE_DEFAULT_PAUSE);
+            strXml += @"<add key=""Pause"" value=""5000"" />";
+            strXml += @"<add key=""LogLevel"" value=""1"" />";
+            strXml += string.Format(@"<add key=""LogFile"" value=""{0}\CCEngineLog.txt"" />", strLogDir);
+            strXml += "</appSettings>";
+            strXml += "</configuration>";
+            File.WriteAllText(strConfig, strXml);
+        }
+
+        public void InstallService(string strCCEnginePath, string strName)
+        {
+            DebugWrite("Services to be installed.");
+            string strInstallUtil = Environment.GetFolderPath(Environment.SpecialFolder.System) + @"\..\Microsoft.NET\Framework\v4.0.30319\installutil.exe";
+            string strArgs = "-i \"" + strCCEnginePath + "\"";
+
+            ProcessStartInfo psi = new ProcessStartInfo(strInstallUtil);
+            psi.Arguments = strArgs;
+            Process installService = new Process();
+            psi.UseShellExecute = false;
+            psi.RedirectStandardInput = true;
+            installService.StartInfo = psi;
+
+
+            installService.Start();
+            installService.StandardInput.WriteLine(strName);
+            installService.WaitForExit();
+            DebugWrite("Services installed. Check services to see that everything looks ok.");
+        }
+
+        public void UninstallService(string strCCEnginePath, string strName)
+        {
+            DebugWrite("Services to be uninstalled.");
+
+            string strInstallUtil = Environment.GetFolderPath(Environment.SpecialFolder.System) + @"\..\Microsoft.NET\Framework\v4.0.30319\installutil.exe";
+            string strArgs = "-u \"" + strCCEnginePath + "\"";
+
+            ProcessStartInfo psi = new ProcessStartInfo(strInstallUtil);
+            psi.Arguments = strArgs;
+            Process installService = new Process();
+            psi.UseShellExecute = false;
+            psi.RedirectStandardInput = true;
+            installService.StartInfo = psi;
+
+
+            installService.Start();
+            installService.StandardInput.WriteLine(strName);
+            installService.WaitForExit();
+            DebugWrite("Services uninstalled. Check services to see that everything looks ok.");
+        }
+
+        private void InstallVCRuntime(string strVcruntimePath)
+        {
+            DebugWrite("VC Runtime to be installed.");
+
+            strVcruntimePath = GetVCRuntimePath(strVcruntimePath);
+
+            ProcessStartInfo psi = new ProcessStartInfo(strVcruntimePath);
+            psi.Arguments = "/q:a";
+            Process installService = new Process { StartInfo = psi };
+
+            installService.Start();
+            installService.WaitForExit();
+
+            DebugWrite("VC Runtime installed.");
+        }
+
+        private string GetVCRuntimePath(string strVcruntimePath)
+        {
+            strVcruntimePath += Is64bit() ? "vcredist_x64.exe" : "vcredist_x86.exe";
+            return strVcruntimePath;
+        }
+
+        private void InstallXpdf(string strXpdfpath)
+        {
+            DebugWrite("Xpdfrasterizer to be installed.");
+
+            if (!Directory.Exists(Environment.GetFolderPath(Environment.SpecialFolder.ProgramFiles) + @"\XpdfRasterizerCom"))
+            {
+                DebugWrite("Creating xpdf directory");
+                Directory.CreateDirectory(Environment.GetFolderPath(Environment.SpecialFolder.ProgramFiles) + @"\XpdfRasterizerCom");
+            }
+            CopyCCFiles(Environment.GetFolderPath(Environment.SpecialFolder.ProgramFiles) + @"\XpdfRasterizerCom", strXpdfpath);
+
+            string filename = Is64bit() ? "XpdfRasterizer64.dll" : "XpdfRasterizer.dll";
+
+            ProcessStartInfo psi = new ProcessStartInfo(Environment.GetFolderPath(Environment.SpecialFolder.System) + @"\regsvr32.exe");
+            psi.Arguments = "/s \"" + Environment.GetFolderPath(Environment.SpecialFolder.ProgramFiles) + @"\XpdfRasterizerCom\" + filename + "\"";
+            Process installService = new Process();
+            installService.StartInfo = psi;
+
+            installService.Start();
+            installService.WaitForExit();
+
+            DebugWrite("Xpdfrasterizer installed.");
+        }
+        /// <summary>
+        /// 
+        /// </summary>
+        /// <param name="strInstallDir">Destination folder</param>
+        /// <param name="strCCDir">Source folder</param>
+        private void CopyCCFiles(string strInstallDir, string strCCDir)
+        {
+            DebugWrite("Copying files from " + strCCDir + " to " + strInstallDir);
+
+            string SourcePath = strCCDir;
+            string DestinationPath = strInstallDir;
+
+            string[] directories = System.IO.Directory.GetDirectories(SourcePath, "*.*", SearchOption.AllDirectories);
+            int iErrors = 0;
+            Parallel.ForEach(directories, dirPath =>
+            {
+                try
+                {
+                    var newPath = dirPath.Replace(SourcePath, DestinationPath);
+                    if (!Directory.Exists(newPath))
+                    {
+                        Directory.CreateDirectory(newPath);
+                    }
+                }
+                catch
+                {
+                    Interlocked.Increment(ref iErrors);
+                    DebugWrite("Could not create " + DestinationPath);
+                }
+            });
+
+            string[] files = System.IO.Directory.GetFiles(SourcePath, "*.*", SearchOption.AllDirectories);
+            int iCount = 0;
+            Parallel.ForEach(files, newPath =>
+            {
+                try
+                {
+                    File.Copy(newPath, newPath.Replace(SourcePath, DestinationPath), true);
+                    Interlocked.Increment(ref iCount);
+                }
+                catch
+                {
+                    Interlocked.Increment(ref iErrors);
+                    DebugWrite("Could not copy " + newPath.Replace(SourcePath, DestinationPath));
+                }
+            });
+            DebugWrite("Copied " + iCount + " files (+ other directories) from " + strCCDir + " to " + strInstallDir);
+            if (iErrors > 0)
+                MessageOutput("File copy failed, please check debug window. (" + iErrors + " times)");
+        }
+        private void SetWritePermission(string strPath, bool bCompleteDirectory)
+        {
+            ProcessStartInfo psi = new ProcessStartInfo("cacls");
+            string strEveryoneName = GetEveryoneUser();
+            if (bCompleteDirectory)
+            {
+                psi.Arguments = string.Format(" \"{0}\" /E /T /C /G \"" + strEveryoneName + "\":F", strPath);
+            }
+            else
+            {
+                psi.Arguments = string.Format(" \"{0}\" /E /G \"" + strEveryoneName + "\":F", strPath);
+            }
+            Process setWritePerm = new Process { StartInfo = psi };
+            setWritePerm.Start();
+            setWritePerm.WaitForExit();
+        }
+
+        private void btnUpgrade_Click(object sender, EventArgs e)
+        {
+            InstallCC(false, txtInstallationName.Text);
+        }
+
+        private bool InstallDb(bool bSecure)
+        {
+            RestoreDataBaseForm rdbf = new RestoreDataBaseForm { DatabaseDataPath = "" };
+
+            if (bSecure)
+            {
+                rdbf.DatabaseFile = txtDatabaseSecureFile.Text;
+            }
+            else
+            {
+                if (File.Exists(txtCustSQL.Text))
+                    rdbf.CustSQL = File.ReadAllText(txtCustSQL.Text);
+                rdbf.DatabaseFile = txtDatabaseFile.Text;
+            }
+            if (rdbf.ShowDialog() == DialogResult.OK)
+                return true;
+            return false;
+        }
+
+        private void btnInstallDb_Click(object sender, EventArgs e)
+        {
+            if (InstallDb(false))
+                MessageOutput("Ok, database installed!");
+            else
+                MessageOutput("Database not installed!");
+        }
+        bool bAMSMode;
+        bool bWebService;
+        private void InstallerForm_Load(object sender, EventArgs e)
+        {
+            if (!IsInAdminRole())
+            {
+                MessageBox.Show("Warning! CC Installer must be run in admin mode!");
+            }
+
+            string strLoc = GetCCDir();
+
+            txtDatabaseFile.Text = strLoc + "\\database\\CCStandalone.bak";
+            txtCustSQL.Text = strLoc + "\\database\\CustSpec.sql";
+            txtDatabaseSecureFile.Text = strLoc + "\\database\\CCStandaloneSec.bak";
+            exportWorkflowMI.Visible = false;
+            // If AMS mode then GO!!!!
+            if (Settings.Default.Mode == "AMS")
+            {
+                bAMSMode = true;
+                Text = "InForm/AMS Installer";
+                lblInstallApplication.Text = "3. Install InForm/AMS";
+                lblAppData.Text = "AMS Data directory";
+                lblInstallationName.Text = "AMS Installation Name";
+                exportWorkflowMI.Visible = true;
+            }
+
+            if (!IsInteractive)
+            {
+                if (UpgradeExisting)
+                    btnUpgrade_Click(null, null);
+                else if (InstallNew)
+                {
+                    if (String.IsNullOrEmpty(DbConnection))
+                        throw new ApplicationException("Missing db connection parameter");
+                    btnInstall_Click(null, null);
+                }
+            }
+
+        }
+
+        private static string GetEveryoneUser()
+        {
+            try
+            {
+                StringBuilder name = new StringBuilder();
+                uint cchName = (uint)name.Capacity;
+                StringBuilder referencedDomainName = new StringBuilder();
+                uint cchReferencedDomainName = (uint)referencedDomainName.Capacity;
+                SID_NAME_USE sidUse;
+                // Sid for BUILTIN\Administrators
+                byte[] Sid = { 1, 1, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 32, 2 };
+
+
+                int err = NO_ERROR;
+                if (!LookupAccountSid(null, Sid, name, ref cchName, referencedDomainName, ref cchReferencedDomainName, out sidUse))
+                {
+                    err = Marshal.GetLastWin32Error();
+                    if (err == ERROR_INSUFFICIENT_BUFFER)
+                    {
+                        name.EnsureCapacity((int)cchName);
+                        referencedDomainName.EnsureCapacity((int)cchReferencedDomainName);
+                        err = NO_ERROR;
+                        if (!LookupAccountSid(null, Sid, name, ref cchName, referencedDomainName, ref cchReferencedDomainName, out sidUse))
+                        {
+                            err = Marshal.GetLastWin32Error();
+                        }
+                    }
+                }
+                if (err == 0)
+                {
+                    return name.ToString();
+                }
+            }
+            catch
+            {
+
+            }
+            return "Everyone";
+        }
+
+        private static string GetCCDir()
+        {
+            string strLoc = Assembly.GetExecutingAssembly().Location;
+            strLoc = strLoc.Substring(0, strLoc.LastIndexOf("\\") - 1);
+            strLoc = strLoc.Substring(0, strLoc.LastIndexOf("\\"));
+            return strLoc;
+        }
+
+
+        const int NO_ERROR = 0;
+        const int ERROR_INSUFFICIENT_BUFFER = 122;
+
+        enum SID_NAME_USE
+        {
+            SidTypeUser = 1,
+            SidTypeGroup,
+            SidTypeDomain,
+            SidTypeAlias,
+            SidTypeWellKnownGroup,
+            SidTypeDeletedAccount,
+            SidTypeInvalid,
+            SidTypeUnknown,
+            SidTypeComputer
+        }
+        [DllImport("advapi32.dll", CharSet = CharSet.Auto, SetLastError = true)]
+        static extern bool LookupAccountSid(
+            string lpSystemName,
+            [MarshalAs(UnmanagedType.LPArray)] byte[] Sid,
+            StringBuilder lpName,
+            ref uint cchName,
+            StringBuilder ReferencedDomainName,
+            ref uint cchReferencedDomainName,
+            out SID_NAME_USE peUse);
+
+        private void editDatabaseConnectionToolStripMenuItem_Click(object sender, EventArgs e)
+        {
+            frmEditWebConfig ewc = new frmEditWebConfig();
+
+            OpenFileDialog ofd = new OpenFileDialog();
+            ofd.Filter = "Config files|*.config";
+            ofd.InitialDirectory = txtInstallDir.Text + txtInstallationName.Text;
+            if (ofd.ShowDialog() == DialogResult.OK)
+            {
+                ewc.SetFile(ofd.FileName);
+                ewc.ShowDialog(this);
+            }
+        }
+
+        internal const ushort PROCESSOR_ARCHITECTURE_INTEL = 0;
+        internal const ushort PROCESSOR_ARCHITECTURE_IA64 = 6;
+        internal const ushort PROCESSOR_ARCHITECTURE_AMD64 = 9;
+        internal const ushort PROCESSOR_ARCHITECTURE_UNKNOWN = 0xFFFF;
+
+        [StructLayout(LayoutKind.Sequential)]
+        internal struct SYSTEM_INFO
+        {
+            public ushort wProcessorArchitecture;
+            public ushort wReserved;
+            public uint dwPageSize;
+            public IntPtr lpMinimumApplicationAddress;
+            public IntPtr lpMaximumApplicationAddress;
+            public UIntPtr dwActiveProcessorMask;
+            public uint dwNumberOfProcessors;
+            public uint dwProcessorType;
+            public uint dwAllocationGranularity;
+            public ushort wProcessorLevel;
+            public ushort wProcessorRevision;
+        };
+
+        [DllImport("kernel32.dll")]
+        internal static extern void GetNativeSystemInfo(ref SYSTEM_INFO lpSystemInfo);
+
+        private static bool Is64bit()
+        {
+            SYSTEM_INFO sysInfo = new SYSTEM_INFO();
+            try
+            {
+                GetNativeSystemInfo(ref sysInfo);
+            }
+            catch
+            {
+                // 2000 server gives error
+                return false;
+            }
+
+            switch (sysInfo.wProcessorArchitecture)
+            {
+                case PROCESSOR_ARCHITECTURE_AMD64:
+                    return true;
+                case PROCESSOR_ARCHITECTURE_IA64:
+                    return true;
+                case PROCESSOR_ARCHITECTURE_INTEL:
+                    return false;
+                default:
+                    return false;
+            }
+        }
+
+        private void testInstallationToolStripMenuItem_Click(object sender, EventArgs e)
+        {
+            // Test to run CCEngine
+            MessageOutput("1. Check that CCEngine is running, then click OK!");
+
+            MessageOutput("2. Click OK to start test.");
+
+            string strWorkDir = Guid.NewGuid().ToString();
+            string strInstallDir = txtInstallDir.Text + "\\" + txtInstallationName.Text + "\\";
+            string strCCDir = GetCCDir();
+            if (bAMSMode)
+                strInstallDir += "DC20\\";
+            if (!Directory.Exists(strInstallDir + @"\InformCC\temp\"))
+            {
+                MessageOutput("This directory: \"" + strInstallDir + @"\InformCC\temp\" + "\" does not exists.!?");
+                return;
+            }
+
+            Directory.CreateDirectory(strInstallDir + @"\InformCC\temp\" + strWorkDir);
+            File.Copy(strCCDir + @"\CCInstall\testfiles\test1.pdf", strInstallDir + @"\InformCC\temp\" + strWorkDir + @"\test1.pdf");
+
+            StringBuilder sb = new StringBuilder();
+            sb.AppendLine("<?xml version=\"1.0\" encoding=\"utf-8\"?>");
+            sb.AppendLine("<CCEngine>");
+            sb.AppendFormat("<WorkingDirectory>{0}</WorkingDirectory>", strWorkDir);
+            sb.AppendLine("<Actions>");
+            sb.AppendLine("<Action command=\"PDFtoPNG\">");
+            sb.AppendLine("<DPI>225</DPI>");
+            sb.AppendLine("<Page>1</Page>");
+            sb.AppendLine("<InFile>test1.pdf</InFile>");
+            sb.AppendLine("<OutFile>Source_p1_r0.png</OutFile>");
+            sb.AppendLine("</Action>");
+            sb.AppendLine("</Actions>");
+            sb.AppendLine("</CCEngine>");
+
+            File.WriteAllText(strInstallDir + @"\InformCC\temp\job_" + strWorkDir.Substring(0, 10) + ".xml", sb.ToString());
+
+            Thread.Sleep(5000);
+
+            if (!File.Exists(strInstallDir + @"\InformCC\temp\job_" + strWorkDir.Substring(0, 10) + ".xml.complete"))
+            {
+                Thread.Sleep(5000);
+            }
+            if (File.Exists(strInstallDir + @"\InformCC\temp\job_" + strWorkDir.Substring(0, 10) + ".xml.error"))
+            {
+                MessageOutput("Something went wrong. Check the CCEngine log.");
+                return;
+            }
+
+            if (!File.Exists(strInstallDir + @"\InformCC\temp\job_" + strWorkDir.Substring(0, 10) + ".xml.complete"))
+            {
+                MessageOutput("Is CCEngine really started?");
+                return;
+            }
+            if (File.Exists(strInstallDir + @"\InformCC\temp\job_" + strWorkDir.Substring(0, 10) + ".xml.complete"))
+            {
+                string strPicFile = strInstallDir + @"\InformCC\temp\" + strWorkDir + "\\Source_p1_r0.png";
+                if (!File.Exists(strPicFile))
+                {
+                    MessageOutput("Something went wrong. File " + strPicFile + " not found?!?");
+                    return;
+                }
+                MessageOutput("Everything is ok. File " + strPicFile + " created.");
+            }
+
+
+
+        }
+
+        private void testWebToolStripMenuItem_Click(object sender, EventArgs e)
+        {
+            Process p = new Process();
+            p.StartInfo = new ProcessStartInfo("http://localhost/" + txtInstallationName.Text + "/InformCC/menu.aspx?standalone=true");
+            p.Start();
+        }
+
+        private void btnInstallSecureDb_Click(object sender, EventArgs e)
+        {
+            if (InstallDb(true))
+                MessageOutput("Ok, secure database installed!");
+            else
+                MessageOutput("Secure database not installed!");
+        }
+
+        private void MessageOutput(string s)
+        {
+            if (IsInteractive)
+            {
+                MessageBox.Show(s);
+            }
+            else
+            {
+                if (OutLogFile != null)
+                    File.WriteAllText(OutLogFile, s + Environment.NewLine);
+                else
+                    Console.Out.WriteLine(s);
+            }
+        }
+
+
+        private void btnInstallOracle_Click(object sender, EventArgs e)
+        {
+            MessageOutput("Go to database\\ccstandalone_ora and edit installdb.cmd. Then run the file.\"");
+        }
+
+
+        private void editInformCCServerLicenseToolStripMenuItem_Click(object sender, EventArgs e)
+        {
+            string CCfolder = txtInstallDir.Text + "\\" + txtInstallationName.Text + "\\InformCC";
+
+
+            OpenFileDialog ofd = new OpenFileDialog();
+            ofd.Filter = "Config files|*.config";
+            ofd.InitialDirectory = CCfolder;
+            if (ofd.ShowDialog() == DialogResult.OK)
+            {
+                CCLicense ccl = new CCLicense(ofd.FileName, true);
+                ccl.ShowDialog();
+            }
+
+
+        }
+
+
+
+        private void exportWorkflowMI_Click(object sender, EventArgs e)
+        {
+            string CCfolder = txtInstallDir.Text + "\\" + txtInstallationName.Text + "\\InformCC";
+
+            OpenFileDialog ofd = new OpenFileDialog();
+            ofd.Filter = "Config files|*.config";
+            ofd.InitialDirectory = CCfolder;
+            if (ofd.ShowDialog() == DialogResult.OK)
+            {
+                ExportConfiguration(Directory.GetParent(Path.GetDirectoryName(ofd.FileName)) + "\\", "DC20");
+            }
+        }
+
+        // Export all user groups, user group permissions, actions, workflow steps/Groups etc, container types / properties, document types / properties to allow comparing multiple installations...
+
+        private bool CheckForParked(string strInstallDir, string strCCSubDir)
+        {
+            string CCroot;
+            CCroot = strInstallDir + @"\InformCC\";
+            if (bAMSMode)
+            {
+                CCroot = strInstallDir + strCCSubDir + @"\";
+            }
+
+            IDbConnection dbconn = GetDatabaseConnectionFromConfig(strInstallDir, strCCSubDir, CCroot);
+            dbconn.Open();
+            try
+            {
+                try
+                {
+                    IDbCommand dbcmd = DCDBConnection.GetCommand("SELECT COUNT(ID) FROM CCPARKEDCOMPARE", dbconn);
+                    int iCnt = (int)dbcmd.ExecuteScalar();
+                    if (iCnt > 0)
+                    {
+                        if (!chkIgnoreParkedCompares.Checked)
+                        {
+                            MessageOutput("There are parked compares in the database. Note that parked compares will not work with an updated version of CC.");
+                            return false;
+                        }
+
+                    }
+                }
+                catch
+                {
+                    // table probably does not exist
+                    return true;
+                }
+            }
+            finally
+            {
+                dbconn.Close();
+                dbconn.Dispose();
+            }
+            // Ok to continue
+            return true;
+        }
+
+
+        private void ExportConfiguration(string strInstallDir, string strCCSubDir)
+        {
+            string CCroot;
+            CCroot = strInstallDir + strCCSubDir + @"\";
+            IDbConnection dbconn = GetDatabaseConnectionFromConfig(strInstallDir, strCCSubDir, CCroot);
+            dbconn.Open();
+            try
+            {
+                StringBuilder sb = new StringBuilder();
+                // User groups
+                sb.AppendLine("Groups and permissions");
+                foreach (clsUserGroup ug in clsUserGroup.ListAll(dbconn, null, "", " ORDER BY GROUPNAME"))
+                {
+                    sb.AppendLine(ug.GroupName);
+                    foreach (clsUserGroupPermission ugp in clsUserGroupPermission.ListAll(dbconn, null, ug.Id))
+                    {
+                        clsUserPermission up = new clsUserPermission(dbconn, null);
+                        up.Load(ugp.PermissionId);
+                        sb.AppendLine(up.Id.ToString().PadRight(7) + " " + up.ModuleName + " " + up.PermissionName);
+                    }
+                }
+
+                sb.AppendLine("Actions");
+                ExportTable(dbconn, sb, "SELECT * FROM WFACTIONS ORDER BY ID", "WFACTIONS");
+                sb.AppendLine("Definitions");
+                ExportTable(dbconn, sb, "SELECT * FROM WFDEF JOIN WFDEFSTEP ON WFDEF.ID = WFDEFSTEP.ID LEFT OUTER JOIN WFDefStepUG ON WFDefStepUG.ID = WFDEFSTEP.ID AND WFDefStepUG.STEPNAME = WFDEFSTEP.STEPNAME LEFT OUTER JOIN WFDefStepUGResponsible ON WFDefStepUGResponsible.ID = WFDEFSTEP.ID AND WFDefStepUGResponsible.STEPNAME = WFDEFSTEP.STEPNAME ORDER BY WFDEF.ID, LOWER(WFDEFSTEP.STEPNAME)", "WFDEFSTEPS");
+                sb.AppendLine("Connections");
+                ExportTable(dbconn, sb, "SELECT * FROM WFDEFCONNECTION JOIN WFDEF ON WFDEF.ID = WFDefId LEFT OUTER JOIN LMSNODE ON WFDEFCONNECTION.NODEID = LMSNODE.ID ORDER BY LMSNODE.ID", "WFDEFCONNECTIONS");
+
+                sb.AppendLine("Node types");
+                ExportTable(dbconn, sb, "SELECT * FROM LMSNODETYPE LEFT OUTER JOIN LMSNODETYPEDCPROPS ON LMSNODETYPE.ID = NODETYPEID LEFT OUTER JOIN DCPROPERTY ON LMSNODETYPEDCPROPS.DCPROPERTYID = DCPROPERTY.ID LEFT OUTER JOIN DCPROPERTYLOV ON DCPROPERTYLOV.DCPROPERTYID = DCPROPERTY.ID ORDER BY LMSNODETYPE.ID, DCPROPERTY.ID, DCPROPERTYLOV.LOVID", "LMSNODETYPES");
+                sb.AppendLine("Doc types");
+                ExportTable(dbconn, sb, "SELECT * FROM LABELPROPERTY LEFT OUTER JOIN LABELPROPERTYDCPROPS ON ID = LABELPROPERTYID LEFT OUTER JOIN DCPROPERTY ON LABELPROPERTYDCPROPS.DCPROPERTYID = DCPROPERTY.ID LEFT OUTER JOIN DCPROPERTYLOV ON DCPROPERTYLOV.DCPROPERTYID = DCPROPERTY.ID ORDER BY LABELPROPERTY.ID, DCPROPERTY.ID, DCPROPERTYLOV.LOVID", "DOCTYPES");
+
+                SaveFileDialog ofdS = new SaveFileDialog();
+                ofdS.InitialDirectory = CCroot;
+                if (ofdS.ShowDialog() == DialogResult.OK)
+                {
+                    File.WriteAllText(ofdS.FileName, sb.ToString());
+                    MessageOutput("OK!");
+                }
+
+            }
+            finally
+            {
+                dbconn.Close();
+                dbconn.Dispose();
+            }
+
+        }
+
+        private static IDbConnection GetDatabaseConnectionFromConfig(string strInstallDir, string strCCSubDir, string CCroot)
+        {
+
+            string CCconfig = CCroot + "web.config";
+
+            Environment.CurrentDirectory = CCroot;
+            // Get connection from current web.config
+            string strConn = "";
+            string strConnSec = "";
+            clsSpecifyDatabase.GetConnectionStringsFromConfig(CCconfig, ref strConn, ref strConnSec);
+            clsSpecifyDatabase.StoreConnectionString(strConn, false);
+            clsSpecifyDatabase.StoreConnectionString(strConnSec, true);
+            AppSettingsReader asr = new AppSettingsReader();
+
+
+            VirtualDirectoryMapping vdm = new VirtualDirectoryMapping(CCroot.Replace("\\\\", "\\"), true);
+            WebConfigurationFileMap wcfm = new WebConfigurationFileMap();
+            wcfm.VirtualDirectories.Add("/", vdm);
+
+            // Get the Web application configuration object.
+            Configuration rootWebConfig1 = WebConfigurationManager.OpenMappedWebConfiguration(wcfm, "/");
+            return Globals.GetConnection();
+        }
+
+        private static void ExportTable(IDbConnection dbconn, StringBuilder sb, string strSQL, string strTableName)
+        {
+            DataSet ds = new DataSet();
+            int colBuf = 0;
+            ds.Load(DCDBConnection.GetCommand(strSQL, dbconn, null).ExecuteReader(), LoadOption.OverwriteChanges, strTableName);
+            string strCols = "";
+            foreach (DataColumn dc in ds.Tables[0].Columns)
+            {
+                strCols += dc.ColumnName + "; ";
+            }
+            sb.AppendLine(strCols);
+            string strCurrVal = "";
+            foreach (DataRow dr in ds.Tables[0].Rows)
+            {
+                if (strCurrVal != dr[0].ToString())
+                {
+                    bool bfirst = strCurrVal == "";
+                    strCurrVal = dr[0].ToString();
+                    if (!bfirst)
+                        sb.AppendLine();
+                }
+                string strRow = "";
+                string blobData = "";
+                for (int idx = 0; idx < dr.ItemArray.Length - colBuf; idx++)
+                {
+                    if (ds.Tables[0].Columns[idx].ColumnName.ToLower().StartsWith("lastchanged") || ds.Tables[0].Columns[idx].ColumnName.ToLower().Equals("revision"))
+                    {
+                        strRow += " : ";
+                        continue;
+                    }
+                    object o = dr.ItemArray[idx];
+                    if (o != null && o.GetType() == typeof(byte[]))
+                    {
+                        byte[] barr = (byte[])o;
+                        blobData += Encoding.Unicode.GetString(barr) + Environment.NewLine;
+                    }
+                    else
+                    {
+                        strRow += o == null ? "" : o + "; ";
+                    }
+                }
+
+                sb.AppendLine(strRow);
+                if (blobData.Length > 0)
+                    sb.AppendLine(blobData);
+            }
+            sb.AppendLine();
+            sb.AppendLine();
+            sb.AppendLine();
+        }
+
+        private void cCEngineInstalluninstallToolStripMenuItem_Click(object sender, EventArgs e)
+        {
+            OpenFileDialog ofd = new OpenFileDialog();
+            ofd.Filter = "CCEngine config files|CCEngine.exe.config";
+            ofd.InitialDirectory = txtInstallDir.Text + txtInstallationName.Text;
+            if (ofd.ShowDialog() == DialogResult.OK)
+            {
+                CCEngineManagement em = new CCEngineManagement();
+                em.CCEngineDirectory = Path.GetDirectoryName(ofd.FileName);
+                em.ShowDialog(this);
+            }
+        }
+
+        public static List<string> GetServicesForPath(string ccDir, string serviceName)
+        {
+            List<string> lstRet = new List<string>();
+            RegistryKey servicesKey = Registry.LocalMachine.OpenSubKey(@"System\CurrentControlSet\services");
+            foreach (string strServiceName in servicesKey.GetSubKeyNames())
+            {
+                if (strServiceName.StartsWith(serviceName))
+                {
+                    RegistryKey rkCCEnginePath = servicesKey.OpenSubKey(strServiceName);
+                    string strPath = Path.GetDirectoryName(rkCCEnginePath.GetValue("ImagePath").ToString().Trim("\"".ToCharArray()));
+                    if (strPath.ToLower() == ccDir.ToLower())
+                    {
+                        lstRet.Add(strServiceName);
+                    }
+                }
+            }
+            return lstRet;
+        }
+
+        private void txtInstallationName_Leave(object sender, EventArgs e)
+        {
+            string appName = txtInstallationName.Text;
+            // Read and populate from existing (if exists)
+            ServerManager iisManager = new ServerManager();
+            bool bFound = false;
+            foreach (ApplicationPool apTmp in iisManager.ApplicationPools)
+            {
+                if (apTmp.Name.Equals(appName, StringComparison.CurrentCultureIgnoreCase))
+                {
+                    bFound = true;
+                    break;
+                }
+            }
+            if (!bFound)
+            {
+                return;
+            }
+            ApplicationPool ap = iisManager.ApplicationPools[appName];
+            Site s = iisManager.Sites[0]; // this is default site...
+            if (s == null)
+            {
+                return;
+            }
+            string appPath = "/" + appName + "/InformCC";
+            if (bAMSMode)
+            {
+                appPath = "/" + appName + "/DC20/InformCC";
+            }
+            Application ccApp = s.Applications[appPath];
+            if (ccApp == null)
+            {
+                return;
+            }
+            if (ccApp.VirtualDirectories["/temp"] == null)
+            {
+                return;
+            }
+
+            var appTempFolder = new DirectoryInfo(ccApp.VirtualDirectories["/temp"].PhysicalPath).Parent;
+            if (appTempFolder != null)
+            {
+                if (appTempFolder.Parent != null)
+                {
+                    txtCCDataDir.Text = appTempFolder.Parent.FullName + "\\";
+                }
+            }
+            if (ccApp.VirtualDirectories["/"] != null)
+            {
+                var parent = new DirectoryInfo(ccApp.VirtualDirectories["/"].PhysicalPath).Parent;
+                if (parent != null)
+                {
+                    if (parent.Parent != null)
+                    {
+                        if (bAMSMode)
+                        {
+                            if (parent.Parent.Parent != null)
+                            {
+                                txtInstallDir.Text = parent.Parent.Parent.FullName + "\\";
+                            }
+                        }
+                        else
+                        {
+                            txtInstallDir.Text = parent.Parent.FullName + "\\";
+                        }
+                    }
+                }
+            }
+        }
+
+        public static int GetIISVersion()
+        {
+            try
+            {
+                RegistryKey rkInetStp = Registry.LocalMachine.OpenSubKey(@"SOFTWARE\Microsoft\InetStp");
+                return (int)rkInetStp.GetValue("MajorVersion");
+            }
+            catch
+            {
+                return 7;
+            }
+        }
+
+        private void btnUninstall_Click(object sender, EventArgs e)
+        {
+            if (MessageBox.Show("Are you sure?", Text, MessageBoxButtons.YesNo) != DialogResult.Yes)
+                return;
+            string strName = txtInstallationName.Text;
+            string CCEngineDirectory = txtInstallDir.Text + txtInstallationName.Text;
+            // Unistall CCEngines...
+            foreach (string serviceName in GetServicesForPath(Path.GetDirectoryName(CCEngineDirectory + "\\CCEngine\\CCEngine.exe.config"), "CCEngine"))
+            {
+                UninstallService(CCEngineDirectory + "\\CCEngine\\CCEngine.exe", serviceName.Substring("CCEngine ".Length));
+            }
+
+            // Uninstall virtual directories
+            ServerManager iisManager = new ServerManager();
+            Site s = iisManager.Sites[0]; // this is default site...
+            if (s.Applications["/"].VirtualDirectories.Any(vd => vd.Path == "/" + txtInstallationName.Text))
+            {
+                UninstallVDir(s, strName, "/InformCC/temp");
+                UninstallVDir(s, strName, "/InformCC/ScannerJobs");
+                UninstallVDir(s, strName, "/InformCC");
+                UninstallVDir(s, strName, "/CCUploadService/ScannerJobs");
+                UninstallVDir(s, strName, "/CCUploadService");
+                UninstallVDir(s, strName, "/DC20/Review/Notes_temp");
+                UninstallVDir(s, strName, "/DC20/Report_temp");
+                UninstallVDir(s, strName, "/DC20/InformCC/ScannerJobs");
+                UninstallVDir(s, strName, "/DC20/InformCC/temp");
+                UninstallVDir(s, strName, "/DC20/InformCC");
+                UninstallVDir(s, strName, "/DC20/InfoPathPreviews");
+                UninstallVDir(s, strName, "/DC20");
+                UninstallVDir(s, strName, "WS_DC_Integration");
+                UninstallVDir(s, strName, "");
+            }
+            iisManager.CommitChanges();
+            // Uninstall applications
+            bool bFound = false;
+            foreach (ApplicationPool ap in iisManager.ApplicationPools)
+            {
+                if (ap.Name.Equals(strName, StringComparison.CurrentCultureIgnoreCase))
+                {
+                    bFound = true;
+                    break;
+                }
+            }
+            if (bFound)
+            {
+                ApplicationPool ap = iisManager.ApplicationPools[strName];
+                ap.Delete();
+                iisManager.CommitChanges();
+            }
+
+            string dataDir = txtCCDataDir.Text + txtInstallationName.Text;
+            if (MessageBox.Show("Do you want to remove the log files and temporary files directories in " + dataDir + "?", Text, MessageBoxButtons.YesNo) == DialogResult.Yes)
+            {
+                try
+                {
+                    Directory.Delete(dataDir, true);
+                }
+                catch (Exception ex)
+                {
+                    MessageBox.Show("Error when deleting: " + ex);
+                }
+            }
+            if (MessageBox.Show("Do you want to remove the application binaries in " + txtInstallDir.Text + txtInstallationName.Text + "?", Text, MessageBoxButtons.YesNo) == DialogResult.Yes)
+            {
+                try
+                {
+                    Directory.Delete(txtInstallDir.Text + txtInstallationName.Text, true);
+                }
+                catch (Exception ex)
+                {
+                    MessageBox.Show("Error when deleting: " + ex);
+                }
+            }
+        }
+
+        private static void UninstallVDir(Site s, string strName, string vSubDir)
+        {
+            if (s.Applications["/"].VirtualDirectories.Any(vd => vd.Path == "/" + strName + vSubDir))
+            {
+                s.Applications["/"].VirtualDirectories.Remove(s.Applications["/"].VirtualDirectories.First(vd => vd.Path == "/" + strName + vSubDir));
+            }
+            if (s.Applications.Any(app => app.Path == "/" + strName + vSubDir))
+            {
+                s.Applications.Remove(s.Applications.First(app => app.Path == "/" + strName + vSubDir));
+            }
+        }
+    }
+}
